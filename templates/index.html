@@ -1,71 +1,162 @@
 <!DOCTYPE html>
-<html lang="hi">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DCRUST Attendance Tracker</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#090d16">
+    <title>DCRUST Attendance • Smart Bunk Tracker</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #090d16; }
+        .glass { background: rgba(17, 24, 39, 0.75); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.08); }
+    </style>
 </head>
-<body class="bg-slate-900 text-white min-h-screen font-sans p-4">
+<body class="text-slate-100 min-h-screen pb-12 selection:bg-indigo-500 selection:text-white">
 
-    <div class="max-w-md mx-auto mt-6">
-        <div class="text-center mb-6">
-            <h1 class="text-3xl font-bold text-blue-400">DCRUST Attendance</h1>
-            <p class="text-slate-400 text-sm mt-1">e-Samarth पोर्टल से लाइव अटेंडेंस और बंक कैलकुलेटर</p>
+    <!-- Top Navbar -->
+    <nav class="sticky top-0 z-30 glass border-b border-slate-800/80 px-4 py-3">
+        <div class="max-w-lg mx-auto flex justify-between items-center">
+            <div class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center font-extrabold text-white shadow-lg shadow-indigo-500/30">D</div>
+                <span class="font-bold text-lg tracking-tight">DCRUST<span class="text-indigo-400">Track</span></span>
+            </div>
+            <div id="navActions" class="hidden flex items-center gap-2">
+                <button onclick="showLogin(true)" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg border border-slate-700 transition">↻ Sync</button>
+                <button onclick="logout()" class="text-xs bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 px-3 py-1.5 rounded-lg border border-rose-500/20 transition">Logout</button>
+            </div>
         </div>
+    </nav>
 
-        <!-- लॉगिन बॉक्स -->
-        <div id="loginBox" class="bg-slate-800 p-6 rounded-2xl shadow-lg border border-slate-700">
-            <div class="mb-4">
-                <label class="block text-sm text-slate-300 mb-1">Enrollment / Roll No</label>
-                <input type="text" id="username" placeholder="अपना Samarth यूज़रनेम डालें" 
-                    class="w-full p-3 rounded-lg bg-slate-700 border border-slate-600 focus:outline-none focus:border-blue-400">
-            </div>
-            <div class="mb-4">
-                <label class="block text-sm text-slate-300 mb-1">Password</label>
-                <input type="password" id="password" placeholder="••••••••" 
-                    class="w-full p-3 rounded-lg bg-slate-700 border border-slate-600 focus:outline-none focus:border-blue-400">
+    <main class="max-w-lg mx-auto px-4 mt-6">
+
+        <!-- LOGIN / SYNC SCREEN -->
+        <div id="loginBox" class="glass p-6 rounded-3xl shadow-2xl">
+            <div class="mb-6">
+                <h1 class="text-2xl font-extrabold text-white">Check e-Samarth Attendance</h1>
+                <p class="text-slate-400 text-xs mt-1">Real-time sync with smart bunk & recovery planner.</p>
             </div>
 
-            <!-- CAPTCHA सेक्शन -->
-            <div id="captchaContainer" class="mb-5 hidden">
-                <label class="block text-sm text-slate-300 mb-1">Captcha भरें</label>
-                <div class="flex items-center gap-3 mb-2">
-                    <img id="captchaImg" src="" alt="Captcha" class="h-12 rounded bg-white p-1">
-                    <button type="button" onclick="loadLoginSession()" class="text-xs bg-slate-700 px-3 py-2 rounded hover:bg-slate-600">↻ नया कोड</button>
-                </div>
-                <input type="text" id="captchaInput" placeholder="ऊपर लिखे अक्षर डालें" 
-                    class="w-full p-3 rounded-lg bg-slate-700 border border-slate-600 focus:outline-none focus:border-blue-400">
-            </div>
-
-            <button onclick="fetchAttendance()" id="submitBtn"
-                class="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-lg transition">
-                अटेंडेंस देखें
-            </button>
-            <p id="statusText" class="text-xs text-amber-400 text-center mt-2"></p>
-            <p class="text-xs text-slate-400 text-center mt-3">🔒 आपका पासवर्ड कहीं भी सेव नहीं होता।</p>
-        </div>
-
-        <!-- रिजल्ट दिखाने की जगह -->
-        <div id="resultBox" class="hidden mt-6 space-y-4">
-            <div class="flex justify-between items-center bg-slate-800 p-4 rounded-xl border border-slate-700">
+            <div class="space-y-4">
                 <div>
-                    <p class="text-xs text-slate-400">प्रोफ़ाइल,</p>
-                    <h2 id="studentName" class="text-lg font-bold text-blue-300"></h2>
+                    <label class="block text-xs font-medium text-slate-400 mb-1.5">Roll Number / Samarth ID</label>
+                    <input type="text" id="username" placeholder="e.g. 26001001112" 
+                        class="w-full px-4 py-3 rounded-xl bg-slate-900/90 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500 transition">
                 </div>
-                <button onclick="location.reload()" class="text-xs bg-slate-700 px-3 py-1.5 rounded-lg hover:bg-slate-600">लॉगआउट</button>
+                <div>
+                    <label class="block text-xs font-medium text-slate-400 mb-1.5">Password</label>
+                    <input type="password" id="password" placeholder="••••••••" 
+                        class="w-full px-4 py-3 rounded-xl bg-slate-900/90 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500 transition">
+                </div>
+
+                <!-- CAPTCHA -->
+                <div id="captchaContainer" class="hidden bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                    <label class="block text-xs font-medium text-slate-400 mb-2">Security Captcha</label>
+                    <div class="flex items-center gap-3 mb-2.5">
+                        <img id="captchaImg" src="" alt="Captcha" class="h-11 rounded-lg bg-white px-2 py-1">
+                        <button type="button" onclick="loadLoginSession()" class="text-xs bg-slate-800 hover:bg-slate-700 px-3 py-2.5 rounded-lg border border-slate-700 transition">↻ Reload</button>
+                    </div>
+                    <input type="text" id="captchaInput" placeholder="Enter characters above" 
+                        class="w-full px-4 py-2.5 rounded-lg bg-slate-950 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500">
+                </div>
+
+                <button onclick="fetchAttendance()" id="submitBtn"
+                    class="w-full bg-indigo-600 hover:bg-indigo-500 active:scale-[0.99] text-white font-semibold py-3.5 rounded-xl shadow-lg shadow-indigo-600/25 transition">
+                    Fetch Live Attendance
+                </button>
             </div>
 
-            <div id="subjectsList" class="space-y-3"></div>
+            <p id="statusText" class="text-xs text-amber-400 text-center mt-3"></p>
+            <div class="mt-5 pt-4 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500">
+                <span>🔒 Zero credential storage</span>
+                <span>⚡ Parallel fetch (~2s)</span>
+            </div>
         </div>
-    </div>
+
+        <!-- DASHBOARD SCREEN -->
+        <div id="resultBox" class="hidden space-y-5">
+            
+            <!-- Hero Overall Card -->
+            <div class="glass p-5 rounded-3xl relative overflow-hidden">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <span id="lastUpdated" class="text-[11px] text-slate-400 bg-slate-800/80 px-2.5 py-1 rounded-full"></span>
+                        <h2 id="studentRoll" class="text-xl font-bold text-white mt-2"></h2>
+                        <p id="overallFraction" class="text-xs text-slate-400 mt-0.5"></p>
+                        
+                        <!-- Target Selector -->
+                        <div class="flex items-center gap-1.5 mt-3">
+                            <span class="text-[11px] text-slate-400">Goal:</span>
+                            <button onclick="setTarget(75)" id="t75" class="target-btn text-[11px] font-semibold px-2.5 py-1 rounded-md bg-indigo-600 text-white">75%</button>
+                            <button onclick="setTarget(80)" id="t80" class="target-btn text-[11px] font-semibold px-2.5 py-1 rounded-md bg-slate-800 text-slate-400">80%</button>
+                            <button onclick="setTarget(85)" id="t85" class="target-btn text-[11px] font-semibold px-2.5 py-1 rounded-md bg-slate-800 text-slate-400">85%</button>
+                        </div>
+                    </div>
+
+                    <!-- Circular Ring -->
+                    <div class="relative w-24 h-24 flex items-center justify-center">
+                        <svg class="w-24 h-24 -rotate-90" viewBox="0 0 36 36">
+                            <path class="text-slate-800" stroke-width="3.2" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                            <path id="overallRing" class="text-emerald-400 transition-all duration-700" stroke-dasharray="0, 100" stroke-width="3.2" stroke-linecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                        </svg>
+                        <div class="absolute text-center">
+                            <span id="overallPercentText" class="text-lg font-extrabold text-white">0%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Filter Pills -->
+            <div class="flex gap-2 overflow-x-auto pb-1">
+                <button onclick="filterCards('ALL')" class="filter-pill text-xs font-medium px-3.5 py-1.5 rounded-full bg-slate-100 text-slate-900">All Subjects</button>
+                <button onclick="filterCards('LOW')" class="filter-pill text-xs font-medium px-3.5 py-1.5 rounded-full bg-slate-800 text-slate-300">⚠️ Below Goal</button>
+                <button onclick="filterCards('Theory')" class="filter-pill text-xs font-medium px-3.5 py-1.5 rounded-full bg-slate-800 text-slate-300">Theory</button>
+                <button onclick="filterCards('Lab')" class="filter-pill text-xs font-medium px-3.5 py-1.5 rounded-full bg-slate-800 text-slate-300">Labs</button>
+            </div>
+
+            <!-- Subject Cards Container -->
+            <div id="subjectsList" class="space-y-3.5"></div>
+        </div>
+    </main>
 
     <script>
         let currentSessionId = "";
+        let appData = null;
+        let simState = {}; // Stores simulated +attend / +bunk clicks per subject
+        let targetPercent = 75;
+        let activeFilter = "ALL";
+
+        window.onload = () => {
+            const cached = localStorage.getItem("dcrust_att_cache");
+            if (cached) {
+                appData = JSON.parse(cached);
+                renderDashboard();
+            } else {
+                loadLoginSession();
+            }
+        };
+
+        function showLogin(keepUsername = false) {
+            document.getElementById('resultBox').classList.add('hidden');
+            document.getElementById('navActions').classList.add('hidden');
+            document.getElementById('loginBox').classList.remove('hidden');
+            if (keepUsername && appData) {
+                document.getElementById('username').value = appData.roll_no;
+            }
+            loadLoginSession();
+        }
+
+        function logout() {
+            localStorage.removeItem("dcrust_att_cache");
+            appData = null;
+            simState = {};
+            document.getElementById('password').value = "";
+            showLogin(false);
+        }
 
         async function loadLoginSession() {
             const statusText = document.getElementById('statusText');
-            statusText.innerText = "DCRUST सर्वर से जुड़ रहा है...";
+            statusText.innerText = "Connecting to DCRUST Samarth...";
             try {
                 const res = await fetch('/init-login');
                 const data = await res.json();
@@ -75,29 +166,25 @@
                     if (data.captcha) {
                         document.getElementById('captchaContainer').classList.remove('hidden');
                         document.getElementById('captchaImg').src = "data:image/png;base64," + data.captcha;
+                        document.getElementById('captchaInput').value = "";
                     }
                 } else {
                     statusText.innerText = data.message;
                 }
             } catch (e) {
-                statusText.innerText = "सर्वर कनेक्ट नहीं हो सका।";
+                statusText.innerText = "Server waking up, please wait 5s and reload...";
             }
         }
 
-        window.onload = loadLoginSession;
-
         async function fetchAttendance() {
-            const username = document.getElementById('username').value;
+            const username = document.getElementById('username').value.trim();
             const password = document.getElementById('password').value;
-            const captcha = document.getElementById('captchaInput').value;
+            const captcha = document.getElementById('captchaInput').value.trim();
             const btn = document.getElementById('submitBtn');
 
-            if(!username || !password) {
-                alert("कृपया ID और Password डालें!");
-                return;
-            }
+            if (!username || !password) return alert("Enter Roll No and Password");
 
-            btn.innerText = "e-Samarth से सटीक डेटा लाया जा रहा है...";
+            btn.innerText = "Syncing all subjects...";
             btn.disabled = true;
 
             try {
@@ -108,59 +195,141 @@
                 });
                 const data = await response.json();
 
-                if(data.status === "success") {
-                    document.getElementById('loginBox').classList.add('hidden');
-                    document.getElementById('resultBox').classList.remove('hidden');
-                    document.getElementById('studentName').innerText = data.student_name;
-
-                    const list = document.getElementById('subjectsList');
-                    list.innerHTML = "";
-
-                    data.subjects.forEach(sub => {
-                        const percent = sub.percentage;
-                        const isSafe = percent >= 75;
-                        
-                        let statusMsg = "";
-                        if (isSafe) {
-                            const canBunk = Math.floor((sub.attended / 0.75) - sub.total);
-                            statusMsg = canBunk > 0 
-                                ? `✅ आप अगली <b>${canBunk} क्लास</b> बंक कर सकते हैं।` 
-                                : `⚠️ एकदम बॉर्डर पर हैं! अगली क्लास बंक न करें।`;
-                        } else {
-                            const needAttend = Math.ceil((0.75 * sub.total - sub.attended) / 0.25);
-                            statusMsg = `🚨 75% के लिए लगातार <b>${needAttend} क्लास</b> लगानी होंगी।`;
-                        }
-
-                        const leaveText = sub.leaves > 0 ? ` (Leave: ${sub.leaves})` : "";
-
-                        list.innerHTML += `
-                            <div class="bg-slate-800 p-4 rounded-xl border ${isSafe ? 'border-emerald-500/40' : 'border-rose-500/40'}">
-                                <div class="flex justify-between items-center mb-2">
-                                    <h3 class="font-semibold text-base">${sub.name}</h3>
-                                    <span class="text-lg font-bold ${isSafe ? 'text-emerald-400' : 'text-rose-400'}">${percent}%</span>
-                                </div>
-                                <div class="w-full bg-slate-700 h-2 rounded-full mb-2">
-                                    <div class="h-2 rounded-full ${isSafe ? 'bg-emerald-500' : 'bg-rose-500'}" style="width: ${Math.min(percent, 100)}%"></div>
-                                </div>
-                                <div class="flex justify-between text-xs text-slate-400 mb-2">
-                                    <span>अटेंड की: ${sub.attended} / ${sub.total}${leaveText}</span>
-                                    <span>टारगेट: 75%</span>
-                                </div>
-                                <p class="text-xs bg-slate-900/60 p-2 rounded-lg text-slate-200">${statusMsg}</p>
-                            </div>
-                        `;
-                    });
+                if (data.status === "success") {
+                    data.timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    appData = data;
+                    simState = {};
+                    localStorage.setItem("dcrust_att_cache", JSON.stringify(data));
+                    renderDashboard();
                 } else {
                     alert(data.message);
                     loadLoginSession();
-                    btn.innerText = "अटेंडेंस देखें";
-                    btn.disabled = false;
                 }
             } catch (err) {
-                alert("सर्वर से जुड़ने में समस्या आई!");
-                btn.innerText = "अटेंडेंस देखें";
+                alert("Connection error. Please try again.");
+            } finally {
+                btn.innerText = "Fetch Live Attendance";
                 btn.disabled = false;
             }
+        }
+
+        function setTarget(val) {
+            targetPercent = val;
+            document.querySelectorAll('.target-btn').forEach(b => {
+                b.className = "target-btn text-[11px] font-semibold px-2.5 py-1 rounded-md bg-slate-800 text-slate-400";
+            });
+            document.getElementById('t' + val).className = "target-btn text-[11px] font-semibold px-2.5 py-1 rounded-md bg-indigo-600 text-white";
+            renderDashboard();
+        }
+
+        function filterCards(type) {
+            activeFilter = type;
+            document.querySelectorAll('.filter-pill').forEach(p => {
+                p.className = "filter-pill text-xs font-medium px-3.5 py-1.5 rounded-full bg-slate-800 text-slate-300";
+            });
+            event.target.className = "filter-pill text-xs font-medium px-3.5 py-1.5 rounded-full bg-slate-100 text-slate-900";
+            renderDashboard();
+        }
+
+        function simulate(idx, addAttend, addTotal) {
+            if (!simState[idx]) simState[idx] = { att: 0, tot: 0 };
+            simState[idx].att += addAttend;
+            simState[idx].tot += addTotal;
+            renderDashboard();
+        }
+
+        function resetSim(idx) {
+            delete simState[idx];
+            renderDashboard();
+        }
+
+        function renderDashboard() {
+            if (!appData) return;
+            document.getElementById('loginBox').classList.add('hidden');
+            document.getElementById('resultBox').classList.remove('hidden');
+            document.getElementById('navActions').classList.remove('hidden');
+
+            document.getElementById('studentRoll').innerText = `Roll: ${appData.roll_no}`;
+            document.getElementById('lastUpdated').innerText = `Synced at ${appData.timestamp || 'Just now'}`;
+
+            let grandAtt = 0, grandTot = 0;
+            const list = document.getElementById('subjectsList');
+            list.innerHTML = "";
+
+            const goalRatio = targetPercent / 100;
+
+            appData.subjects.forEach((sub, idx) => {
+                const sim = simState[idx] || { att: 0, tot: 0 };
+                const att = sub.attended + sim.att;
+                const tot = sub.total + sim.tot;
+                grandAtt += att;
+                grandTot += tot;
+
+                const pct = tot > 0 ? ((att / tot) * 100) : 0;
+                const pctDisplay = pct.toFixed(1);
+                const isSafe = pct >= targetPercent;
+
+                // Filter check
+                if (activeFilter === 'LOW' && isSafe) return;
+                if (activeFilter === 'Theory' && sub.tag !== 'Theory') return;
+                if (activeFilter === 'Lab' && sub.tag !== 'Lab') return;
+
+                let insight = "";
+                if (isSafe) {
+                    const canBunk = Math.floor((att / goalRatio) - tot);
+                    insight = canBunk > 0 
+                        ? `Safe to skip <b class="text-emerald-400">${canBunk}</b> more class${canBunk > 1 ? 'es' : ''}` 
+                        : `<span class="text-amber-400">On the edge! Do not skip next class</span>`;
+                } else {
+                    const need = Math.ceil((goalRatio * tot - att) / (1 - goalRatio));
+                    insight = `Attend next <b class="text-rose-400">${need}</b> class${need > 1 ? 'es' : ''} in a row for ${targetPercent}%`;
+                }
+
+                const simBadge = (sim.att > 0 || sim.tot > 0) 
+                    ? `<button onclick="resetSim(${idx})" class="text-[10px] text-indigo-400 underline ml-2">Reset Sim</button>` 
+                    : "";
+
+                list.innerHTML += `
+                    <div class="glass p-4 rounded-2xl border ${isSafe ? 'border-slate-800' : 'border-rose-500/30'}">
+                        <div class="flex justify-between items-start gap-3">
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-800 text-indigo-300">${sub.tag}</span>
+                                    <span class="text-[11px] text-slate-500">${sub.code}</span>
+                                </div>
+                                <h3 class="font-semibold text-sm text-white mt-1.5 leading-snug">${sub.name}</h3>
+                            </div>
+                            <span class="text-xl font-extrabold ${isSafe ? 'text-emerald-400' : 'text-rose-400'}">${pctDisplay}%</span>
+                        </div>
+
+                        <div class="w-full bg-slate-800/90 h-1.5 rounded-full my-3 overflow-hidden">
+                            <div class="h-full rounded-full transition-all duration-300 ${isSafe ? 'bg-emerald-400' : 'bg-rose-500'}" style="width: ${Math.min(pct, 100)}%"></div>
+                        </div>
+
+                        <div class="flex justify-between items-center text-xs text-slate-400">
+                            <span>Attended: <b class="text-slate-200">${att}</b> / ${tot} ${simBadge}</span>
+                            <span>${insight}</span>
+                        </div>
+
+                        <!-- Interactive Simulator Controls -->
+                        <div class="mt-3 pt-2.5 border-t border-slate-800/70 flex justify-between items-center">
+                            <span class="text-[11px] text-slate-500">What-if simulator:</span>
+                            <div class="flex gap-1.5">
+                                <button onclick="simulate(${idx}, 1, 1)" class="text-[11px] bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 px-2.5 py-1 rounded-lg transition">+ Attend</button>
+                                <button onclick="simulate(${idx}, 0, 1)" class="text-[11px] bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 px-2.5 py-1 rounded-lg transition">+ Bunk</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            // Update Overall Hero Ring
+            const overallPct = grandTot > 0 ? ((grandAtt / grandTot) * 100).toFixed(1) : 0;
+            document.getElementById('overallPercentText').innerText = `${overallPct}%`;
+            document.getElementById('overallFraction').innerText = `${grandAtt} of ${grandTot} classes attended`;
+            const ring = document.getElementById('overallRing');
+            ring.setAttribute('stroke-dasharray', `${Math.min(overallPct, 100)}, 100`);
+            ring.className = `transition-all duration-700 ${overallPct >= targetPercent ? 'text-emerald-400' : 'text-rose-500'}`;
         }
     </script>
 </body>

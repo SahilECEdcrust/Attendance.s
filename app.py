@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, jsonify
 import requests
 from bs4 import BeautifulSoup
+from concurrent.futures import ThreadPoolExecutor
 import base64
 import uuid
 import re
@@ -39,18 +40,42 @@ def init_login():
             captcha_base64 = base64.b64encode(img_res.content).decode('utf-8')
 
         session_id = str(uuid.uuid4())
-        sessions[session_id] = {
-            "session": session,
-            "csrf": csrf_token
-        }
+        sessions[session_id] = {"session": session, "csrf": csrf_token}
 
-        return jsonify({
-            "status": "success",
-            "session_id": session_id,
-            "captcha": captcha_base64
-        })
+        return jsonify({"status": "success", "session_id": session_id, "captcha": captcha_base64})
     except Exception as e:
-        return jsonify({"status": "error", "message": f"DCRUST सर्वर से संपर्क नहीं हो पा रहा: {str(e)}"})
+        return jsonify({"status": "error", "message": f"DCRUST server unreachable: {str(e)}"})
+
+def fetch_single_subject(session, row_data):
+    """Fetches a single subject's attendance in parallel."""
+    try:
+        detail_res = session.get(row_data["url"], headers=HEADERS, timeout=15)
+        detail_text = BeautifulSoup(detail_res.text, 'html.parser').get_text(" ", strip=True)
+
+        total_match = re.search(r'Total Classes Taken:\s*(\d+)', detail_text)
+        present_match = re.search(r'Present Count:\s*(\d+)', detail_text)
+        leave_match = re.search(r'Leave Count:\s*(\d+)', detail_text)
+        percent_match = re.search(r'Present Percentage:\s*([\d.]+)%', detail_text)
+
+        if total_match and present_match:
+            total_taken = int(total_match.group(1))
+            present_count = int(present_match.group(1))
+            leave_count = int(leave_match.group(1)) if leave_match else 0
+            effective_total = max(total_taken - leave_count, 1)
+            exact_percent = float(percent_match.group(1)) if percent_match else round((present_count / effective_total) * 100, 2)
+
+            return {
+                "code": row_data["code"],
+                "name": row_data["name"],
+                "tag": row_data["tag"],
+                "attended": present_count,
+                "total": effective_total,
+                "leaves": leave_count,
+                "percentage": exact_percent
+            }
+    except Exception:
+        return None
+    return None
 
 @app.route('/get-attendance', methods=['POST'])
 def get_attendance():
@@ -61,7 +86,7 @@ def get_attendance():
     captcha = data.get('captcha', '')
 
     if session_id not in sessions:
-        return jsonify({"status": "error", "message": "सेशन एक्सपायर हो गया, पेज रिफ्रेश करें।"})
+        return jsonify({"status": "error", "message": "Session expired. Refreshing..."})
 
     user_data = sessions.pop(session_id)
     session = user_data["session"]
@@ -76,70 +101,57 @@ def get_attendance():
 
     try:
         login_res = session.post(LOGIN_URL, data=payload, headers=HEADERS, timeout=15)
-
         if "site/login" in login_res.url and "Logout" not in login_res.text:
-            return jsonify({"status": "error", "message": "गलत Roll No, Password या CAPTCHA! कृपया दोबारा प्रयास करें।"})
+            return jsonify({"status": "error", "message": "Invalid Roll No, Password, or CAPTCHA."})
 
         att_res = session.get(ATTENDANCE_URL, headers=HEADERS, timeout=15)
         soup = BeautifulSoup(att_res.text, 'html.parser')
 
-        subjects = []
+        tasks = []
         table = soup.find('table')
-        
         if table:
-            rows = table.find_all('tr')[1:]
-            for row in rows:
+            for row in table.find_all('tr')[1:]:
                 cols = row.find_all('td')
                 if len(cols) >= 6:
                     class_type = cols[1].get_text(strip=True)
                     course_full = cols[2].get_text(strip=True)
                     
+                    code = course_full.split(":")[0].strip() if ":" in course_full else ""
                     clean_name = course_full.split(":")[-1].strip().title() if ":" in course_full else course_full
                     tag = "Lab" if "Lab" in class_type else ("Tute" if "Tute" in class_type else "Theory")
-                    display_name = f"{clean_name} ({tag})"
 
                     view_link = cols[-1].find('a')
                     if view_link and view_link.get('href'):
                         href = view_link['href']
                         detail_url = href if href.startswith("http") else BASE_URL + href
-                        
-                        detail_res = session.get(detail_url, headers=HEADERS, timeout=15)
-                        detail_text = BeautifulSoup(detail_res.text, 'html.parser').get_text(" ", strip=True)
+                        tasks.append({"code": code, "name": clean_name, "tag": tag, "url": detail_url})
 
-                        # ऊपर वाले Summary Box से सटीक नंबर निकालें
-                        total_match = re.search(r'Total Classes Taken:\s*(\d+)', detail_text)
-                        present_match = re.search(r'Present Count:\s*(\d+)', detail_text)
-                        leave_match = re.search(r'Leave Count:\s*(\d+)', detail_text)
-                        percent_match = re.search(r'Present Percentage:\s*([\d.]+)%', detail_text)
+        # Fetch all subjects simultaneously (takes ~1.5s instead of 12s)
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            results = list(executor.map(lambda t: fetch_single_subject(session, t), tasks))
 
-                        if total_match and present_match:
-                            total_taken = int(total_match.group(1))
-                            present_count = int(present_match.group(1))
-                            leave_count = int(leave_match.group(1)) if leave_match else 0
-                            
-                            # Samarth नियम: Effective Total = Total Taken - Leave Count
-                            effective_total = max(total_taken - leave_count, 1)
-                            exact_percent = float(percent_match.group(1)) if percent_match else round((present_count / effective_total) * 100, 2)
-
-                            subjects.append({
-                                "name": display_name,
-                                "attended": present_count,
-                                "total": effective_total,
-                                "leaves": leave_count,
-                                "percentage": exact_percent
-                            })
-
+        subjects = [r for r in results if r is not None]
         if not subjects:
-            return jsonify({"status": "error", "message": "अटेंडेंस डेटा नहीं मिल सका।"})
+            return jsonify({"status": "error", "message": "Could not parse attendance records."})
+
+        # Calculate overall stats
+        total_attended = sum(s["attended"] for s in subjects)
+        total_classes = sum(s["total"] for s in subjects)
+        overall_percent = round((total_attended / max(total_classes, 1)) * 100, 2)
 
         return jsonify({
             "status": "success",
-            "student_name": f"B.Tech CSE ({username})",
+            "roll_no": username,
+            "overall": {
+                "attended": total_attended,
+                "total": total_classes,
+                "percentage": overall_percent
+            },
             "subjects": subjects
         })
 
     except Exception as e:
-        return jsonify({"status": "error", "message": f"त्रुटि: {str(e)}"})
+        return jsonify({"status": "error", "message": f"Server error: {str(e)}"})
 
 if __name__ == '__main__':
     app.run(debug=True)
