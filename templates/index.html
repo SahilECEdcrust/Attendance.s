@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DCRUST Attendance Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-900 text-white min-h-screen font-sans p-4">
+
+    <div class="max-w-md mx-auto mt-6">
+        <div class="text-center mb-6">
+            <h1 class="text-3xl font-bold text-blue-400">DCRUST Attendance</h1>
+            <p class="text-slate-400 text-sm mt-1">e-Samarth पोर्टल से लाइव अटेंडेंस और बंक कैलकुलेटर</p>
+        </div>
+
+        <!-- लॉगिन बॉक्स -->
+        <div id="loginBox" class="bg-slate-800 p-6 rounded-2xl shadow-lg border border-slate-700">
+            <div class="mb-4">
+                <label class="block text-sm text-slate-300 mb-1">Enrollment / Roll No</label>
+                <input type="text" id="username" placeholder="अपना Samarth यूज़रनेम डालें" 
+                    class="w-full p-3 rounded-lg bg-slate-700 border border-slate-600 focus:outline-none focus:border-blue-400">
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm text-slate-300 mb-1">Password</label>
+                <input type="password" id="password" placeholder="••••••••" 
+                    class="w-full p-3 rounded-lg bg-slate-700 border border-slate-600 focus:outline-none focus:border-blue-400">
+            </div>
+
+            <!-- CAPTCHA सेक्शन -->
+            <div id="captchaContainer" class="mb-5 hidden">
+                <label class="block text-sm text-slate-300 mb-1">Captcha भरें</label>
+                <div class="flex items-center gap-3 mb-2">
+                    <img id="captchaImg" src="" alt="Captcha" class="h-12 rounded bg-white p-1">
+                    <button type="button" onclick="loadLoginSession()" class="text-xs bg-slate-700 px-3 py-2 rounded hover:bg-slate-600">↻ नया कोड</button>
+                </div>
+                <input type="text" id="captchaInput" placeholder="ऊपर लिखे अक्षर डालें" 
+                    class="w-full p-3 rounded-lg bg-slate-700 border border-slate-600 focus:outline-none focus:border-blue-400">
+            </div>
+
+            <button onclick="fetchAttendance()" id="submitBtn"
+                class="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-lg transition">
+                अटेंडेंस देखें
+            </button>
+            <p id="statusText" class="text-xs text-amber-400 text-center mt-2"></p>
+            <p class="text-xs text-slate-400 text-center mt-3">🔒 आपका पासवर्ड कहीं भी सेव नहीं होता।</p>
+        </div>
+
+        <!-- रिजल्ट दिखाने की जगह -->
+        <div id="resultBox" class="hidden mt-6 space-y-4">
+            <div class="flex justify-between items-center bg-slate-800 p-4 rounded-xl border border-slate-700">
+                <div>
+                    <p class="text-xs text-slate-400">प्रोफ़ाइल,</p>
+                    <h2 id="studentName" class="text-lg font-bold text-blue-300"></h2>
+                </div>
+                <button onclick="location.reload()" class="text-xs bg-slate-700 px-3 py-1.5 rounded-lg hover:bg-slate-600">लॉगआउट</button>
+            </div>
+
+            <div id="subjectsList" class="space-y-3"></div>
+        </div>
+    </div>
+
+    <script>
+        let currentSessionId = "";
+
+        async function loadLoginSession() {
+            const statusText = document.getElementById('statusText');
+            statusText.innerText = "DCRUST सर्वर से जुड़ रहा है...";
+            try {
+                const res = await fetch('/init-login');
+                const data = await res.json();
+                if (data.status === "success") {
+                    currentSessionId = data.session_id;
+                    statusText.innerText = "";
+                    if (data.captcha) {
+                        document.getElementById('captchaContainer').classList.remove('hidden');
+                        document.getElementById('captchaImg').src = "data:image/png;base64," + data.captcha;
+                    }
+                } else {
+                    statusText.innerText = data.message;
+                }
+            } catch (e) {
+                statusText.innerText = "सर्वर कनेक्ट नहीं हो सका।";
+            }
+        }
+
+        window.onload = loadLoginSession;
+
+        async function fetchAttendance() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const captcha = document.getElementById('captchaInput').value;
+            const btn = document.getElementById('submitBtn');
+
+            if(!username || !password) {
+                alert("कृपया ID और Password डालें!");
+                return;
+            }
+
+            btn.innerText = "e-Samarth से सटीक डेटा लाया जा रहा है...";
+            btn.disabled = true;
+
+            try {
+                const response = await fetch('/get-attendance', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: currentSessionId, username, password, captcha })
+                });
+                const data = await response.json();
+
+                if(data.status === "success") {
+                    document.getElementById('loginBox').classList.add('hidden');
+                    document.getElementById('resultBox').classList.remove('hidden');
+                    document.getElementById('studentName').innerText = data.student_name;
+
+                    const list = document.getElementById('subjectsList');
+                    list.innerHTML = "";
+
+                    data.subjects.forEach(sub => {
+                        const percent = sub.percentage;
+                        const isSafe = percent >= 75;
+                        
+                        let statusMsg = "";
+                        if (isSafe) {
+                            const canBunk = Math.floor((sub.attended / 0.75) - sub.total);
+                            statusMsg = canBunk > 0 
+                                ? `✅ आप अगली <b>${canBunk} क्लास</b> बंक कर सकते हैं।` 
+                                : `⚠️ एकदम बॉर्डर पर हैं! अगली क्लास बंक न करें।`;
+                        } else {
+                            const needAttend = Math.ceil((0.75 * sub.total - sub.attended) / 0.25);
+                            statusMsg = `🚨 75% के लिए लगातार <b>${needAttend} क्लास</b> लगानी होंगी।`;
+                        }
+
+                        const leaveText = sub.leaves > 0 ? ` (Leave: ${sub.leaves})` : "";
+
+                        list.innerHTML += `
+                            <div class="bg-slate-800 p-4 rounded-xl border ${isSafe ? 'border-emerald-500/40' : 'border-rose-500/40'}">
+                                <div class="flex justify-between items-center mb-2">
+                                    <h3 class="font-semibold text-base">${sub.name}</h3>
+                                    <span class="text-lg font-bold ${isSafe ? 'text-emerald-400' : 'text-rose-400'}">${percent}%</span>
+                                </div>
+                                <div class="w-full bg-slate-700 h-2 rounded-full mb-2">
+                                    <div class="h-2 rounded-full ${isSafe ? 'bg-emerald-500' : 'bg-rose-500'}" style="width: ${Math.min(percent, 100)}%"></div>
+                                </div>
+                                <div class="flex justify-between text-xs text-slate-400 mb-2">
+                                    <span>अटेंड की: ${sub.attended} / ${sub.total}${leaveText}</span>
+                                    <span>टारगेट: 75%</span>
+                                </div>
+                                <p class="text-xs bg-slate-900/60 p-2 rounded-lg text-slate-200">${statusMsg}</p>
+                            </div>
+                        `;
+                    });
+                } else {
+                    alert(data.message);
+                    loadLoginSession();
+                    btn.innerText = "अटेंडेंस देखें";
+                    btn.disabled = false;
+                }
+            } catch (err) {
+                alert("सर्वर से जुड़ने में समस्या आई!");
+                btn.innerText = "अटेंडेंस देखें";
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
