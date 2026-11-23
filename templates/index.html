@@ -12,115 +12,128 @@
         .glass { background: rgba(17, 24, 39, 0.78); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.08); }
     </style>
 </head>
-<body class="text-slate-100 min-h-screen pb-14 selection:bg-indigo-500 selection:text-white">
+<body class="text-slate-100 min-h-screen flex flex-col justify-between selection:bg-indigo-500 selection:text-white">
 
-    <!-- Top Navbar -->
-    <nav class="sticky top-0 z-30 glass border-b border-slate-800/80 px-4 py-3">
-        <div class="max-w-lg mx-auto flex justify-between items-center">
-            <div class="flex items-center gap-2">
-                <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center font-extrabold text-white shadow-lg shadow-indigo-500/30">D</div>
-                <span class="font-bold text-lg tracking-tight">DCRUST<span class="text-indigo-400">Track</span></span>
-            </div>
-            <div id="navActions" class="hidden flex items-center gap-2">
-                <button onclick="showLogin(true)" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg border border-slate-700 transition">↻ Sync</button>
-                <button onclick="logout()" class="text-xs bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 px-3 py-1.5 rounded-lg border border-rose-500/20 transition">Logout</button>
-            </div>
-        </div>
-    </nav>
-
-    <main class="max-w-lg mx-auto px-4 mt-6">
-
-        <!-- LOGIN SCREEN -->
-        <div id="loginBox" class="glass p-6 rounded-3xl shadow-2xl">
-            <div class="mb-6">
-                <h1 class="text-2xl font-extrabold text-white">Check e-Samarth Attendance</h1>
-                <p class="text-slate-400 text-xs mt-1">Real-time attendance, date-wise history & DCRUST PYQs.</p>
-            </div>
-
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-xs font-medium text-slate-400 mb-1.5">Roll Number / Samarth ID</label>
-                    <input type="text" id="username" placeholder="e.g. 2600100XXXX" 
-                        class="w-full px-4 py-3 rounded-xl bg-slate-900/90 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500 transition">
-                </div>
-                <div>
-                    <label class="block text-xs font-medium text-slate-400 mb-1.5">Password</label>
-                    <input type="password" id="password" placeholder="••••••••" 
-                        class="w-full px-4 py-3 rounded-xl bg-slate-900/90 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500 transition">
-                </div>
-
-                <!-- CAPTCHA -->
-                <div id="captchaContainer" class="hidden bg-slate-900/60 p-3 rounded-xl border border-slate-800">
-                    <label class="block text-xs font-medium text-slate-400 mb-2">Security Captcha</label>
-                    <div class="flex items-center gap-3 mb-2.5">
-                        <img id="captchaImg" src="" alt="Captcha" class="h-11 rounded-lg bg-white px-2 py-1">
-                        <button type="button" onclick="loadLoginSession()" class="text-xs bg-slate-800 hover:bg-slate-700 px-3 py-2.5 rounded-lg border border-slate-700 transition">↻ Reload</button>
-                    </div>
-                    <input type="text" id="captchaInput" placeholder="Enter characters above" 
-                        class="w-full px-4 py-2.5 rounded-lg bg-slate-950 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500">
-                </div>
-
-                <button onclick="fetchAttendance()" id="submitBtn"
-                    class="w-full bg-indigo-600 hover:bg-indigo-500 active:scale-[0.99] text-white font-semibold py-3.5 rounded-xl shadow-lg shadow-indigo-600/25 transition">
-                    Fetch Live Attendance
-                </button>
-            </div>
-
-            <p id="statusText" class="text-xs text-amber-400 text-center mt-3"></p>
-            <div class="mt-5 pt-4 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500">
-                <span>🔒 Zero credential storage</span>
-                <span>📚 Subject-wise PYQs</span>
-            </div>
-        </div>
-
-        <!-- DASHBOARD SCREEN -->
-        <div id="resultBox" class="hidden space-y-5">
-            
-            <!-- Hero Overall Card -->
-            <div class="glass p-5 rounded-3xl relative overflow-hidden">
-                <div class="flex justify-between items-center">
+    <div>
+        <!-- Top Navbar -->
+        <nav class="sticky top-0 z-30 glass border-b border-slate-800/80 px-4 py-3">
+            <div class="max-w-lg mx-auto flex justify-between items-center">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center font-extrabold text-white shadow-lg shadow-indigo-500/30">D</div>
                     <div>
-                        <span id="lastUpdated" class="text-[11px] text-slate-400 bg-slate-800/80 px-2.5 py-1 rounded-full"></span>
-                        <h2 id="studentRoll" class="text-xl font-bold text-white mt-2"></h2>
-                        <p id="overallFraction" class="text-xs text-slate-400 mt-0.5"></p>
-                        
-                        <div class="flex items-center gap-1.5 mt-3">
-                            <span class="text-[11px] text-slate-400">Goal:</span>
-                            <button onclick="setTarget(75)" id="t75" class="target-btn text-[11px] font-semibold px-2.5 py-1 rounded-md bg-indigo-600 text-white">75%</button>
-                            <button onclick="setTarget(80)" id="t80" class="target-btn text-[11px] font-semibold px-2.5 py-1 rounded-md bg-slate-800 text-slate-400">80%</button>
-                            <button onclick="setTarget(85)" id="t85" class="target-btn text-[11px] font-semibold px-2.5 py-1 rounded-md bg-slate-800 text-slate-400">85%</button>
-                        </div>
+                        <span class="font-bold text-lg tracking-tight leading-none block">DCRUST<span class="text-indigo-400">Track</span></span>
+                        <span class="text-[10px] text-slate-400 font-medium block mt-0.5">Created with ❤️ by Sahil</span>
+                    </div>
+                </div>
+                <div id="navActions" class="hidden flex items-center gap-2">
+                    <button onclick="showLogin()" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg border border-slate-700 transition">↻ Sync</button>
+                    <button onclick="logout()" class="text-xs bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 px-3 py-1.5 rounded-lg border border-rose-500/20 transition">Logout</button>
+                </div>
+            </div>
+        </nav>
+
+        <main class="max-w-lg mx-auto px-4 mt-6">
+
+            <!-- LOGIN SCREEN -->
+            <div id="loginBox" class="glass p-6 rounded-3xl shadow-2xl">
+                <div class="mb-6">
+                    <h1 class="text-2xl font-extrabold text-white">Check e-Samarth Attendance</h1>
+                    <p class="text-slate-400 text-xs mt-1">Real-time attendance, date-wise history & DCRUST PYQs.</p>
+                </div>
+
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-400 mb-1.5">Roll Number / Samarth ID</label>
+                        <input type="text" id="username" autocomplete="off" placeholder="e.g. 2600100XXXX" 
+                            class="w-full px-4 py-3 rounded-xl bg-slate-900/90 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500 transition">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-400 mb-1.5">Password</label>
+                        <input type="password" id="password" autocomplete="off" placeholder="••••••••" 
+                            class="w-full px-4 py-3 rounded-xl bg-slate-900/90 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500 transition">
                     </div>
 
-                    <!-- Circular Ring -->
-                    <div class="relative w-24 h-24 flex items-center justify-center">
-                        <svg class="w-24 h-24 -rotate-90" viewBox="0 0 36 36">
-                            <path class="text-slate-800" stroke-width="3.2" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
-                            <path id="overallRing" class="text-emerald-400 transition-all duration-700" stroke-dasharray="0, 100" stroke-width="3.2" stroke-linecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
-                        </svg>
-                        <div class="absolute text-center">
-                            <span id="overallPercentText" class="text-lg font-extrabold text-white">0%</span>
+                    <!-- CAPTCHA -->
+                    <div id="captchaContainer" class="hidden bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                        <label class="block text-xs font-medium text-slate-400 mb-2">Security Captcha</label>
+                        <div class="flex items-center gap-3 mb-2.5">
+                            <img id="captchaImg" src="" alt="Captcha" class="h-11 rounded-lg bg-white px-2 py-1">
+                            <button type="button" onclick="loadLoginSession()" class="text-xs bg-slate-800 hover:bg-slate-700 px-3 py-2.5 rounded-lg border border-slate-700 transition">↻ Reload</button>
                         </div>
+                        <input type="text" id="captchaInput" autocomplete="off" placeholder="Enter characters above" 
+                            class="w-full px-4 py-2.5 rounded-lg bg-slate-950 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500">
                     </div>
+
+                    <button onclick="fetchAttendance()" id="submitBtn"
+                        class="w-full bg-indigo-600 hover:bg-indigo-500 active:scale-[0.99] text-white font-semibold py-3.5 rounded-xl shadow-lg shadow-indigo-600/25 transition">
+                        Fetch Live Attendance
+                    </button>
+                </div>
+
+                <p id="statusText" class="text-xs text-amber-400 text-center mt-3"></p>
+                <div class="mt-5 pt-4 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500">
+                    <span>🔒 Zero credential storage</span>
+                    <span>📚 Subject-wise PYQs</span>
                 </div>
             </div>
 
-            <!-- Filter Pills -->
-            <div class="flex gap-2 overflow-x-auto pb-1">
-                <button onclick="filterCards('ALL', this)" class="filter-pill text-xs font-medium px-3.5 py-1.5 rounded-full bg-slate-100 text-slate-900">All Subjects</button>
-                <button onclick="filterCards('LOW', this)" class="filter-pill text-xs font-medium px-3.5 py-1.5 rounded-full bg-slate-800 text-slate-300">⚠️ Below Goal</button>
-                <button onclick="filterCards('Theory', this)" class="filter-pill text-xs font-medium px-3.5 py-1.5 rounded-full bg-slate-800 text-slate-300">Theory</button>
-                <button onclick="filterCards('Lab', this)" class="filter-pill text-xs font-medium px-3.5 py-1.5 rounded-full bg-slate-800 text-slate-300">Labs</button>
+            <!-- DASHBOARD SCREEN -->
+            <div id="resultBox" class="hidden space-y-5">
+                
+                <!-- Hero Overall Card -->
+                <div class="glass p-5 rounded-3xl relative overflow-hidden">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <span id="lastUpdated" class="text-[11px] text-slate-400 bg-slate-800/80 px-2.5 py-1 rounded-full"></span>
+                            <h2 id="studentRoll" class="text-xl font-bold text-white mt-2"></h2>
+                            <p id="overallFraction" class="text-xs text-slate-400 mt-0.5"></p>
+                            
+                            <div class="flex items-center gap-1.5 mt-3">
+                                <span class="text-[11px] text-slate-400">Goal:</span>
+                                <button onclick="setTarget(75)" id="t75" class="target-btn text-[11px] font-semibold px-2.5 py-1 rounded-md bg-indigo-600 text-white">75%</button>
+                                <button onclick="setTarget(80)" id="t80" class="target-btn text-[11px] font-semibold px-2.5 py-1 rounded-md bg-slate-800 text-slate-400">80%</button>
+                                <button onclick="setTarget(85)" id="t85" class="target-btn text-[11px] font-semibold px-2.5 py-1 rounded-md bg-slate-800 text-slate-400">85%</button>
+                            </div>
+                        </div>
+
+                        <!-- Circular Ring -->
+                        <div class="relative w-24 h-24 flex items-center justify-center">
+                            <svg class="w-24 h-24 -rotate-90" viewBox="0 0 36 36">
+                                <path class="text-slate-800" stroke-width="3.2" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                                <path id="overallRing" class="text-emerald-400 transition-all duration-700" stroke-dasharray="0, 100" stroke-width="3.2" stroke-linecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                            </svg>
+                            <div class="absolute text-center">
+                                <span id="overallPercentText" class="text-lg font-extrabold text-white">0%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Filter Pills -->
+                <div class="flex gap-2 overflow-x-auto pb-1">
+                    <button onclick="filterCards('ALL', this)" class="filter-pill text-xs font-medium px-3.5 py-1.5 rounded-full bg-slate-100 text-slate-900">All Subjects</button>
+                    <button onclick="filterCards('LOW', this)" class="filter-pill text-xs font-medium px-3.5 py-1.5 rounded-full bg-slate-800 text-slate-300">⚠️ Below Goal</button>
+                    <button onclick="filterCards('Theory', this)" class="filter-pill text-xs font-medium px-3.5 py-1.5 rounded-full bg-slate-800 text-slate-300">Theory</button>
+                    <button onclick="filterCards('Lab', this)" class="filter-pill text-xs font-medium px-3.5 py-1.5 rounded-full bg-slate-800 text-slate-300">Labs</button>
+                </div>
+
+                <p class="text-[11px] text-slate-400 flex items-center gap-1.5 px-1">
+                    <span>💡</span> Tap any subject card to view date-wise attendance & PYQs.
+                </p>
+
+                <!-- Subject Cards Container -->
+                <div id="subjectsList" class="space-y-3.5"></div>
             </div>
+        </main>
+    </div>
 
-            <p class="text-[11px] text-slate-400 flex items-center gap-1.5 px-1">
-                <span>💡</span> Tap any subject card to view date-wise attendance & PYQs.
-            </p>
-
-            <!-- Subject Cards Container -->
-            <div id="subjectsList" class="space-y-3.5"></div>
+    <!-- Creator Credit Footer -->
+    <footer class="max-w-lg mx-auto px-4 mt-10 mb-6 text-center">
+        <div class="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-slate-900/80 border border-slate-800/80 text-xs text-slate-400 shadow-lg">
+            <span>Created with ❤️ by</span>
+            <span class="font-bold text-indigo-400 tracking-wide">Sahil</span>
         </div>
-    </main>
+    </footer>
 
     <!-- SUBJECT DETAIL MODAL -->
     <div id="subjectModal" class="fixed inset-0 z-50 hidden bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onclick="closeModalOnBackdrop(event)">
@@ -198,11 +211,12 @@
             }
         };
 
-        function showLogin(keepUsername = false) {
+        function showLogin() {
             document.getElementById('resultBox').classList.add('hidden');
             document.getElementById('navActions').classList.add('hidden');
             document.getElementById('loginBox').classList.remove('hidden');
-            if (keepUsername && appData) document.getElementById('username').value = appData.roll_no;
+            document.getElementById('username').value = "";
+            document.getElementById('password').value = "";
             loadLoginSession();
         }
 
@@ -210,8 +224,7 @@
             localStorage.removeItem("dcrust_att_cache_v3");
             appData = null;
             simState = {};
-            document.getElementById('password').value = "";
-            showLogin(false);
+            showLogin();
         }
 
         async function loadLoginSession() {
@@ -306,12 +319,10 @@
         }
 
         function formatHumanDate(rawDate) {
-            // Handle YYYY-MM-DD
             if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
                 const d = new Date(rawDate + "T00:00:00");
                 if (!isNaN(d)) return d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
             }
-            // Handle DD-MM-YYYY or DD/MM/YYYY
             const m = rawDate.match(/^(\d{2})[-/](\d{2})[-/](\d{4})$/);
             if (m) {
                 const d = new Date(`${m[3]}-${m[2]}-${m[1]}T00:00:00`);
@@ -330,7 +341,6 @@
             document.getElementById('modalCode').innerText = sub.code;
             document.getElementById('modalTitle').innerText = sub.name;
 
-            // Remove "For Engineers" filler words and strict quotes so Google finds actual DCRUST papers
             const cleanTopic = sub.name.replace(/for engineers/i, '').trim();
             const searchQuery = encodeURIComponent(`DCRUST ${cleanTopic} previous year question paper`);
             document.getElementById('pyqSearchBtn').href = `https://www.google.com/search?q=${searchQuery}`;
