@@ -4,15 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#090d16">
-    <title>DCRUST Attendance • Smart Bunk Tracker</title>
+    <title>DCRUST Attendance • Smart Bunk, History & PYQs</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #090d16; }
-        .glass { background: rgba(17, 24, 39, 0.75); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.08); }
+        .glass { background: rgba(17, 24, 39, 0.78); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.08); }
     </style>
 </head>
-<body class="text-slate-100 min-h-screen pb-12 selection:bg-indigo-500 selection:text-white">
+<body class="text-slate-100 min-h-screen pb-14 selection:bg-indigo-500 selection:text-white">
 
     <!-- Top Navbar -->
     <nav class="sticky top-0 z-30 glass border-b border-slate-800/80 px-4 py-3">
@@ -30,11 +30,11 @@
 
     <main class="max-w-lg mx-auto px-4 mt-6">
 
-        <!-- LOGIN / SYNC SCREEN -->
+        <!-- LOGIN SCREEN -->
         <div id="loginBox" class="glass p-6 rounded-3xl shadow-2xl">
             <div class="mb-6">
                 <h1 class="text-2xl font-extrabold text-white">Check e-Samarth Attendance</h1>
-                <p class="text-slate-400 text-xs mt-1">Real-time sync with smart bunk & recovery planner.</p>
+                <p class="text-slate-400 text-xs mt-1">Real-time attendance, date-wise history & DCRUST PYQs.</p>
             </div>
 
             <div class="space-y-4">
@@ -69,7 +69,7 @@
             <p id="statusText" class="text-xs text-amber-400 text-center mt-3"></p>
             <div class="mt-5 pt-4 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500">
                 <span>🔒 Zero credential storage</span>
-                <span>⚡ Parallel fetch (~2s)</span>
+                <span>📚 Subject-wise PYQs</span>
             </div>
         </div>
 
@@ -84,7 +84,6 @@
                         <h2 id="studentRoll" class="text-xl font-bold text-white mt-2"></h2>
                         <p id="overallFraction" class="text-xs text-slate-400 mt-0.5"></p>
                         
-                        <!-- Target Selector -->
                         <div class="flex items-center gap-1.5 mt-3">
                             <span class="text-[11px] text-slate-400">Goal:</span>
                             <button onclick="setTarget(75)" id="t75" class="target-btn text-[11px] font-semibold px-2.5 py-1 rounded-md bg-indigo-600 text-white">75%</button>
@@ -108,26 +107,92 @@
 
             <!-- Filter Pills -->
             <div class="flex gap-2 overflow-x-auto pb-1">
-                <button onclick="filterCards('ALL')" class="filter-pill text-xs font-medium px-3.5 py-1.5 rounded-full bg-slate-100 text-slate-900">All Subjects</button>
-                <button onclick="filterCards('LOW')" class="filter-pill text-xs font-medium px-3.5 py-1.5 rounded-full bg-slate-800 text-slate-300">⚠️ Below Goal</button>
-                <button onclick="filterCards('Theory')" class="filter-pill text-xs font-medium px-3.5 py-1.5 rounded-full bg-slate-800 text-slate-300">Theory</button>
-                <button onclick="filterCards('Lab')" class="filter-pill text-xs font-medium px-3.5 py-1.5 rounded-full bg-slate-800 text-slate-300">Labs</button>
+                <button onclick="filterCards('ALL', this)" class="filter-pill text-xs font-medium px-3.5 py-1.5 rounded-full bg-slate-100 text-slate-900">All Subjects</button>
+                <button onclick="filterCards('LOW', this)" class="filter-pill text-xs font-medium px-3.5 py-1.5 rounded-full bg-slate-800 text-slate-300">⚠️ Below Goal</button>
+                <button onclick="filterCards('Theory', this)" class="filter-pill text-xs font-medium px-3.5 py-1.5 rounded-full bg-slate-800 text-slate-300">Theory</button>
+                <button onclick="filterCards('Lab', this)" class="filter-pill text-xs font-medium px-3.5 py-1.5 rounded-full bg-slate-800 text-slate-300">Labs</button>
             </div>
+
+            <p class="text-[11px] text-slate-400 flex items-center gap-1.5 px-1">
+                <span>💡</span> Tap any subject card to view date-wise attendance & PYQs.
+            </p>
 
             <!-- Subject Cards Container -->
             <div id="subjectsList" class="space-y-3.5"></div>
         </div>
     </main>
 
+    <!-- SUBJECT DETAIL MODAL (Dates + PYQ Actions) -->
+    <div id="subjectModal" class="fixed inset-0 z-50 hidden bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onclick="closeModalOnBackdrop(event)">
+        <div class="bg-[#0f1623] border border-slate-800 w-full max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[88vh] flex flex-col shadow-2xl overflow-hidden">
+            
+            <!-- Modal Header -->
+            <div class="p-5 border-b border-slate-800 flex justify-between items-start gap-3">
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span id="modalTag" class="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300"></span>
+                        <span id="modalCode" class="text-xs text-slate-400"></span>
+                    </div>
+                    <h3 id="modalTitle" class="text-base font-bold text-white mt-1.5 leading-snug"></h3>
+                </div>
+                <button onclick="closeSubjectModal()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center text-sm">✕</button>
+            </div>
+
+            <!-- Quick Count Strip -->
+            <div class="grid grid-cols-3 gap-2 px-5 py-3 bg-slate-900/60 border-b border-slate-800/80 text-center">
+                <div class="bg-emerald-500/10 border border-emerald-500/20 rounded-xl py-2">
+                    <p id="modalPresentCount" class="text-base font-extrabold text-emerald-400">0</p>
+                    <p class="text-[10px] text-slate-400 uppercase font-semibold">Present</p>
+                </div>
+                <div class="bg-rose-500/10 border border-rose-500/20 rounded-xl py-2">
+                    <p id="modalAbsentCount" class="text-base font-extrabold text-rose-400">0</p>
+                    <p class="text-[10px] text-slate-400 uppercase font-semibold">Absent</p>
+                </div>
+                <div class="bg-sky-500/10 border border-sky-500/20 rounded-xl py-2">
+                    <p id="modalLeaveCount" class="text-base font-extrabold text-sky-400">0</p>
+                    <p class="text-[10px] text-slate-400 uppercase font-semibold">Leave</p>
+                </div>
+            </div>
+
+            <!-- METHOD 2: SMART PYQ SEARCH & CONTRIBUTE BAR -->
+            <div class="px-5 py-3 bg-indigo-950/30 border-b border-slate-800/80 flex gap-2">
+                <a id="pyqSearchBtn" href="#" target="_blank" rel="noopener noreferrer"
+                   class="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold py-2.5 px-3 rounded-xl flex items-center justify-center gap-1.5 shadow transition">
+                    <span>🔍</span> Find PYQs Online
+                </a>
+                <a id="pyqContributeBtn" href="#" target="_blank" rel="noopener noreferrer"
+                   class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold py-2.5 px-3 rounded-xl flex items-center justify-center gap-1.5 transition">
+                    <span>📤</span> Upload PYQ
+                </a>
+            </div>
+
+            <!-- Modal Status Filter -->
+            <div class="px-5 pt-3 pb-2 flex gap-2 overflow-x-auto">
+                <button onclick="filterModalLogs('ALL', this)" class="modal-pill text-xs font-medium px-3 py-1 rounded-full bg-slate-100 text-slate-900">All Dates</button>
+                <button onclick="filterModalLogs('PRESENT', this)" class="modal-pill text-xs font-medium px-3 py-1 rounded-full bg-slate-800 text-emerald-400">Present</button>
+                <button onclick="filterModalLogs('ABSENT', this)" class="modal-pill text-xs font-medium px-3 py-1 rounded-full bg-slate-800 text-rose-400">Absent</button>
+                <button onclick="filterModalLogs('LEAVE', this)" class="modal-pill text-xs font-medium px-3 py-1 rounded-full bg-slate-800 text-sky-400">Leave</button>
+            </div>
+
+            <!-- Scrollable Date List -->
+            <div id="modalLogsList" class="p-5 pt-2 overflow-y-auto space-y-2 flex-1"></div>
+        </div>
+    </div>
+
     <script>
+        // Replace this with your Google Form / Google Drive community upload link whenever ready!
+        const CONTRIBUTE_LINK = "https://forms.google.com";
+
         let currentSessionId = "";
         let appData = null;
-        let simState = {}; // Stores simulated +attend / +bunk clicks per subject
+        let simState = {};
         let targetPercent = 75;
         let activeFilter = "ALL";
+        let selectedSubjectIndex = null;
+        let modalLogFilter = "ALL";
 
         window.onload = () => {
-            const cached = localStorage.getItem("dcrust_att_cache");
+            const cached = localStorage.getItem("dcrust_att_cache_v2");
             if (cached) {
                 appData = JSON.parse(cached);
                 renderDashboard();
@@ -140,14 +205,12 @@
             document.getElementById('resultBox').classList.add('hidden');
             document.getElementById('navActions').classList.add('hidden');
             document.getElementById('loginBox').classList.remove('hidden');
-            if (keepUsername && appData) {
-                document.getElementById('username').value = appData.roll_no;
-            }
+            if (keepUsername && appData) document.getElementById('username').value = appData.roll_no;
             loadLoginSession();
         }
 
         function logout() {
-            localStorage.removeItem("dcrust_att_cache");
+            localStorage.removeItem("dcrust_att_cache_v2");
             appData = null;
             simState = {};
             document.getElementById('password').value = "";
@@ -172,7 +235,7 @@
                     statusText.innerText = data.message;
                 }
             } catch (e) {
-                statusText.innerText = "Server waking up, please wait 5s and reload...";
+                statusText.innerText = "Server waking up, wait 5s and reload...";
             }
         }
 
@@ -184,7 +247,7 @@
 
             if (!username || !password) return alert("Enter Roll No and Password");
 
-            btn.innerText = "Syncing all subjects...";
+            btn.innerText = "Syncing subjects & dates...";
             btn.disabled = true;
 
             try {
@@ -199,7 +262,7 @@
                     data.timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                     appData = data;
                     simState = {};
-                    localStorage.setItem("dcrust_att_cache", JSON.stringify(data));
+                    localStorage.setItem("dcrust_att_cache_v2", JSON.stringify(data));
                     renderDashboard();
                 } else {
                     alert(data.message);
@@ -222,25 +285,123 @@
             renderDashboard();
         }
 
-        function filterCards(type) {
+        function filterCards(type, el) {
             activeFilter = type;
             document.querySelectorAll('.filter-pill').forEach(p => {
                 p.className = "filter-pill text-xs font-medium px-3.5 py-1.5 rounded-full bg-slate-800 text-slate-300";
             });
-            event.target.className = "filter-pill text-xs font-medium px-3.5 py-1.5 rounded-full bg-slate-100 text-slate-900";
+            el.className = "filter-pill text-xs font-medium px-3.5 py-1.5 rounded-full bg-slate-100 text-slate-900";
             renderDashboard();
         }
 
-        function simulate(idx, addAttend, addTotal) {
+        function simulate(e, idx, addAttend, addTotal) {
+            e.stopPropagation();
             if (!simState[idx]) simState[idx] = { att: 0, tot: 0 };
             simState[idx].att += addAttend;
             simState[idx].tot += addTotal;
             renderDashboard();
         }
 
-        function resetSim(idx) {
+        function resetSim(e, idx) {
+            e.stopPropagation();
             delete simState[idx];
             renderDashboard();
+        }
+
+        function formatHumanDate(isoDate) {
+            const d = new Date(isoDate + "T00:00:00");
+            return d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+        }
+
+        // OPEN SUBJECT DETAIL MODAL + DYNAMIC PYQ SEARCH URL
+        function openSubjectModal(idx) {
+            selectedSubjectIndex = idx;
+            modalLogFilter = "ALL";
+            const sub = appData.subjects[idx];
+            const logs = sub.logs || [];
+
+            document.getElementById('modalTag').innerText = sub.tag;
+            document.getElementById('modalCode').innerText = sub.code;
+            document.getElementById('modalTitle').innerText = sub.name;
+
+            // Build automatic Google PYQ search link for this exact DCRUST subject
+            const searchQuery = encodeURIComponent(`DCRUST ${sub.code} "${sub.name}" previous year question paper PYQ pdf`);
+            document.getElementById('pyqSearchBtn').href = `https://www.google.com/search?q=${searchQuery}`;
+            document.getElementById('pyqContributeBtn').href = CONTRIBUTE_LINK;
+
+            const presentCnt = logs.filter(l => l.status === "PRESENT").length || sub.attended;
+            const absentCnt = logs.filter(l => l.status === "ABSENT").length || Math.max(sub.total - sub.attended, 0);
+            const leaveCnt = logs.filter(l => l.status === "LEAVE").length || (sub.leaves || 0);
+
+            document.getElementById('modalPresentCount').innerText = presentCnt;
+            document.getElementById('modalAbsentCount').innerText = absentCnt;
+            document.getElementById('modalLeaveCount').innerText = leaveCnt;
+
+            document.querySelectorAll('.modal-pill').forEach((p, i) => {
+                p.className = i === 0 
+                    ? "modal-pill text-xs font-medium px-3 py-1 rounded-full bg-slate-100 text-slate-900"
+                    : "modal-pill text-xs font-medium px-3 py-1 rounded-full bg-slate-800 text-slate-300";
+            });
+
+            renderModalLogs();
+            document.getElementById('subjectModal').classList.remove('hidden');
+        }
+
+        function closeSubjectModal() {
+            document.getElementById('subjectModal').classList.add('hidden');
+        }
+
+        function closeModalOnBackdrop(e) {
+            if (e.target.id === 'subjectModal') closeSubjectModal();
+        }
+
+        function filterModalLogs(status, el) {
+            modalLogFilter = status;
+            document.querySelectorAll('.modal-pill').forEach(p => {
+                p.className = "modal-pill text-xs font-medium px-3 py-1 rounded-full bg-slate-800 text-slate-300";
+            });
+            el.className = "modal-pill text-xs font-medium px-3 py-1 rounded-full bg-slate-100 text-slate-900";
+            renderModalLogs();
+        }
+
+        function renderModalLogs() {
+            const sub = appData.subjects[selectedSubjectIndex];
+            const container = document.getElementById('modalLogsList');
+            const logs = [...(sub.logs || [])].sort((a, b) => b.date.localeCompare(a.date));
+
+            const filtered = modalLogFilter === "ALL" 
+                ? logs 
+                : logs.filter(l => l.status === modalLogFilter);
+
+            if (!filtered.length) {
+                container.innerHTML = `<p class="text-xs text-slate-400 text-center py-8">No records found for this filter. (Click ↻ Sync if logs are empty)</p>`;
+                return;
+            }
+
+            container.innerHTML = filtered.map(item => {
+                let badge = "bg-emerald-500/15 text-emerald-400 border-emerald-500/30";
+                let dot = "bg-emerald-400";
+                if (item.status === "ABSENT") {
+                    badge = "bg-rose-500/15 text-rose-400 border-rose-500/30";
+                    dot = "bg-rose-400";
+                } else if (item.status === "LEAVE") {
+                    badge = "bg-sky-500/15 text-sky-400 border-sky-500/30";
+                    dot = "bg-sky-400";
+                }
+
+                return `
+                    <div class="flex justify-between items-center bg-slate-900/80 border border-slate-800/90 px-3.5 py-2.5 rounded-xl">
+                        <div class="flex items-center gap-2.5">
+                            <span class="w-2 h-2 rounded-full ${dot}"></span>
+                            <div>
+                                <p class="text-xs font-semibold text-slate-100">${formatHumanDate(item.date)}</p>
+                                <p class="text-[11px] text-slate-500">${item.time}</p>
+                            </div>
+                        </div>
+                        <span class="text-[10px] font-bold px-2.5 py-1 rounded-md border ${badge}">${item.status}</span>
+                    </div>
+                `;
+            }).join('');
         }
 
         function renderDashboard() {
@@ -255,7 +416,6 @@
             let grandAtt = 0, grandTot = 0;
             const list = document.getElementById('subjectsList');
             list.innerHTML = "";
-
             const goalRatio = targetPercent / 100;
 
             appData.subjects.forEach((sub, idx) => {
@@ -269,7 +429,6 @@
                 const pctDisplay = pct.toFixed(1);
                 const isSafe = pct >= targetPercent;
 
-                // Filter check
                 if (activeFilter === 'LOW' && isSafe) return;
                 if (activeFilter === 'Theory' && sub.tag !== 'Theory') return;
                 if (activeFilter === 'Lab' && sub.tag !== 'Lab') return;
@@ -278,19 +437,19 @@
                 if (isSafe) {
                     const canBunk = Math.floor((att / goalRatio) - tot);
                     insight = canBunk > 0 
-                        ? `Safe to skip <b class="text-emerald-400">${canBunk}</b> more class${canBunk > 1 ? 'es' : ''}` 
-                        : `<span class="text-amber-400">On the edge! Do not skip next class</span>`;
+                        ? `Safe to skip <b class="text-emerald-400">${canBunk}</b> more` 
+                        : `<span class="text-amber-400">On the edge!</span>`;
                 } else {
                     const need = Math.ceil((goalRatio * tot - att) / (1 - goalRatio));
-                    insight = `Attend next <b class="text-rose-400">${need}</b> class${need > 1 ? 'es' : ''} in a row for ${targetPercent}%`;
+                    insight = `Attend next <b class="text-rose-400">${need}</b> in a row`;
                 }
 
                 const simBadge = (sim.att > 0 || sim.tot > 0) 
-                    ? `<button onclick="resetSim(${idx})" class="text-[10px] text-indigo-400 underline ml-2">Reset Sim</button>` 
+                    ? `<button onclick="resetSim(event, ${idx})" class="text-[10px] text-indigo-400 underline ml-2">Reset</button>` 
                     : "";
 
                 list.innerHTML += `
-                    <div class="glass p-4 rounded-2xl border ${isSafe ? 'border-slate-800' : 'border-rose-500/30'}">
+                    <div onclick="openSubjectModal(${idx})" class="glass p-4 rounded-2xl border ${isSafe ? 'border-slate-800 hover:border-indigo-500/50' : 'border-rose-500/30 hover:border-rose-500/60'} cursor-pointer active:scale-[0.99] transition">
                         <div class="flex justify-between items-start gap-3">
                             <div>
                                 <div class="flex items-center gap-2">
@@ -299,7 +458,10 @@
                                 </div>
                                 <h3 class="font-semibold text-sm text-white mt-1.5 leading-snug">${sub.name}</h3>
                             </div>
-                            <span class="text-xl font-extrabold ${isSafe ? 'text-emerald-400' : 'text-rose-400'}">${pctDisplay}%</span>
+                            <div class="text-right">
+                                <span class="text-xl font-extrabold ${isSafe ? 'text-emerald-400' : 'text-rose-400'}">${pctDisplay}%</span>
+                                <p class="text-[10px] text-indigo-400 mt-0.5">Dates & PYQs ›</p>
+                            </div>
                         </div>
 
                         <div class="w-full bg-slate-800/90 h-1.5 rounded-full my-3 overflow-hidden">
@@ -311,19 +473,17 @@
                             <span>${insight}</span>
                         </div>
 
-                        <!-- Interactive Simulator Controls -->
                         <div class="mt-3 pt-2.5 border-t border-slate-800/70 flex justify-between items-center">
-                            <span class="text-[11px] text-slate-500">What-if simulator:</span>
+                            <span class="text-[11px] text-slate-500">Simulator:</span>
                             <div class="flex gap-1.5">
-                                <button onclick="simulate(${idx}, 1, 1)" class="text-[11px] bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 px-2.5 py-1 rounded-lg transition">+ Attend</button>
-                                <button onclick="simulate(${idx}, 0, 1)" class="text-[11px] bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 px-2.5 py-1 rounded-lg transition">+ Bunk</button>
+                                <button onclick="simulate(event, ${idx}, 1, 1)" class="text-[11px] bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 px-2.5 py-1 rounded-lg transition">+ Attend</button>
+                                <button onclick="simulate(event, ${idx}, 0, 1)" class="text-[11px] bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 px-2.5 py-1 rounded-lg transition">+ Bunk</button>
                             </div>
                         </div>
                     </div>
                 `;
             });
 
-            // Update Overall Hero Ring
             const overallPct = grandTot > 0 ? ((grandAtt / grandTot) * 100).toFixed(1) : 0;
             document.getElementById('overallPercentText').innerText = `${overallPct}%`;
             document.getElementById('overallFraction').innerText = `${grandAtt} of ${grandTot} classes attended`;
