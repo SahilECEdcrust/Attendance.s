@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, jsonify
 import requests
 from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta
 import base64
 import uuid
 import re
@@ -13,10 +14,13 @@ sessions = {}
 BASE_URL = "https://dcrustm.samarth.edu.in"
 LOGIN_URL = f"{BASE_URL}/index.php/site/login"
 ATTENDANCE_URL = f"{BASE_URL}/index.php/student-attendance/attendance/index"
-TIMETABLE_URL = f"{BASE_URL}/index.php/student-attendance/attendance/view-time-table"
+TIMETABLE_PAGE_URL = f"{BASE_URL}/index.php/student-attendance/attendance/view-time-table"
+CLASSES_API_URL = f"{BASE_URL}/index.php/student-attendance/attendance-api/get-classes-of-student"
 
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "application/json, text/javascript, */*; q=0.01",
+    "X-Requested-With": "XMLHttpRequest"
 }
 
 @app.route('/')
@@ -126,74 +130,152 @@ def fetch_single_subject(session, row_data):
         return None
     return None
 
-def fetch_timetable(session, dashboard_soup):
-    """Fetches and parses the DCRUST e-Samarth weekly timetable from view-time-table."""
+def extract_student_token(html_text):
+    """Extracts student_id token from view-time-table or attendance HTML."""
+    patterns = [
+        r'get-classes-of-student\?[^"\'\s<>]*student_id=([A-Za-z0-9_-]+)',
+        r'student_id["\']?\s*[:=]\s*["\']([A-Za-z0-9_-]{12,})["\']',
+    ]
+    for pat in patterns:
+        m = re.search(pat, html_text)
+        if m:
+            return m.group(1)
+    return None
+
+def parse_dt(val):
+    """Parses ISO or standard datetime strings into datetime object."""
+    if not val or not isinstance(val, str):
+        return None
+    cleaned = val.replace("Z", "+00:00").strip()
+    try:
+        return datetime.fromisoformat(cleaned)
+    except Exception:
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%d-%m-%Y %H:%M:%S", "%d-%m-%Y %H:%M"):
+            try:
+                return datetime.strptime(cleaned[:19], fmt)
+            except Exception:
+                continue
+    return None
+
+def fetch_timetable(session, att_html=""):
+    """Fetches student classes from e-Samarth attendance-api/get-classes-of-student."""
     days_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
     schedule = {d: [] for d in days_order}
 
-    candidate_urls = [TIMETABLE_URL]
-    for a in dashboard_soup.find_all('a', href=True):
-        href = a['href']
-        text = a.get_text(" ", strip=True).lower()
-        if any(k in href.lower() or k in text for k in ["time-table", "timetable", "time table"]):
-            full_url = href if href.startswith("http") else BASE_URL + href
-            if full_url not in candidate_urls:
-                candidate_urls.append(full_url)
+    try:
+        tt_res = session.get(TIMETABLE_PAGE_URL, headers=HEADERS, timeout=12)
+        combined_html = (tt_res.text or "") + "\n" + (att_html or "")
+        student_token = extract_student_token(combined_html)
 
-    for url in candidate_urls:
-        try:
-            res = session.get(url, headers=HEADERS, timeout=12)
-            if res.status_code != 200 or "site/login" in res.url:
+        if not student_token:
+            return schedule
+
+        now = datetime.now()
+        week_start = (now - timedelta(days=now.weekday())).strftime("%Y-%m-%d")
+        week_end = (now + timedelta(days=14)).strftime("%Y-%m-%d")
+
+        candidate_requests = [
+            (CLASSES_API_URL, {"student_id": student_token, "start": week_start, "end": week_end}),
+            (CLASSES_API_URL, {"student_id": student_token}),
+        ]
+
+        payload_items = []
+        for api_url, params in candidate_requests:
+            api_res = session.get(api_url, params=params, headers=HEADERS, timeout=12)
+            if api_res.status_code != 200:
+                continue
+            try:
+                data = api_res.json()
+            except Exception:
                 continue
 
-            soup = BeautifulSoup(res.text, 'html.parser')
+            if isinstance(data, list):
+                payload_items = data
+            elif isinstance(data, dict):
+                for key in ("data", "classes", "events", "timetable", "records", "result"):
+                    if isinstance(data.get(key), list):
+                        payload_items = data[key]
+                        break
 
-            for table in soup.find_all('table'):
-                rows = table.find_all('tr')
-                if len(rows) < 2:
-                    continue
+            if payload_items:
+                break
 
-                headers = [th.get_text(" ", strip=True) for th in rows[0].find_all(['th', 'td'])]
-                found_any = False
+        seen = {d: set() for d in days_order}
 
-                # Case A: Rows = Days (Monday..Saturday), Columns = Time Slots
-                for row in rows[1:]:
-                    cols = [c.get_text(" | ", strip=True) for c in row.find_all(['td', 'th'])]
-                    if not cols:
-                        continue
-                    first_cell = cols[0].strip().title()
-                    matched_day = next((d for d in days_order if d.lower() in first_cell.lower()), None)
-                    if matched_day:
-                        for idx in range(1, len(cols)):
-                            cell_text = cols[idx].strip()
-                            if cell_text and cell_text not in ["-", "—", "Break", "Lunch", "N/A", "Free"]:
-                                found_any = True
-                                slot_time = headers[idx] if idx < len(headers) else f"Period {idx}"
-                                schedule[matched_day].append({"time": slot_time, "raw": cell_text})
+        for item in payload_items:
+            if not isinstance(item, dict):
+                continue
 
-                # Case B: Columns = Days (Monday..Saturday), Rows = Time Slots
-                if not found_any:
-                    day_col_map = {}
-                    for idx, h in enumerate(headers):
-                        matched_day = next((d for d in days_order if d.lower() in h.lower()), None)
-                        if matched_day:
-                            day_col_map[idx] = matched_day
+            start_dt = parse_dt(
+                item.get("start") or item.get("start_time") or item.get("startTime") or item.get("from_time") or item.get("date")
+            )
+            end_dt = parse_dt(
+                item.get("end") or item.get("end_time") or item.get("endTime") or item.get("to_time")
+            )
 
-                    if day_col_map:
-                        for row in rows[1:]:
-                            cols = [c.get_text(" | ", strip=True) for c in row.find_all(['td', 'th'])]
-                            slot_time = cols[0] if cols else "Slot"
-                            for col_idx, day_name in day_col_map.items():
-                                if col_idx < len(cols):
-                                    cell_text = cols[col_idx].strip()
-                                    if cell_text and cell_text not in ["-", "—", "Break", "Lunch", "N/A", "Free"]:
-                                        found_any = True
-                                        schedule[day_name].append({"time": slot_time, "raw": cell_text})
+            day_name = None
+            raw_day = str(item.get("day") or item.get("day_name") or item.get("weekday") or "").strip().title()
+            if raw_day in schedule:
+                day_name = raw_day
+            elif start_dt:
+                wk_name = start_dt.strftime("%A")
+                if wk_name in schedule:
+                    day_name = wk_name
 
-                if found_any:
-                    return schedule
-        except Exception:
-            continue
+            if not day_name:
+                continue
+
+            if start_dt and end_dt:
+                time_label = f"{start_dt.strftime('%I:%M %p')} - {end_dt.strftime('%I:%M %p')}"
+            elif start_dt:
+                time_label = start_dt.strftime("%I:%M %p")
+            else:
+                time_label = str(item.get("time") or item.get("slot") or item.get("timing") or "Scheduled Slot")
+
+            title = (
+                item.get("title")
+                or item.get("course_name")
+                or item.get("subject_name")
+                or item.get("course")
+                or item.get("name")
+                or item.get("label")
+                or ""
+            )
+            room = item.get("room") or item.get("room_no") or item.get("venue") or item.get("location") or ""
+
+            # If Samarth embeds details in an extendedProps or description dict/string
+            ext = item.get("extendedProps") if isinstance(item.get("extendedProps"), dict) else {}
+            if not title:
+                title = ext.get("title") or ext.get("course_name") or ext.get("subject") or ""
+            if not room:
+                room = ext.get("room") or ext.get("venue") or ""
+
+            # Strip HTML tags if title has HTML
+            title_clean = BeautifulSoup(str(title), "html.parser").get_text(" - ", strip=True)
+            if room and str(room).strip() and str(room).strip().lower() not in title_clean.lower():
+                raw_label = f"{title_clean} ({str(room).strip()})" if title_clean else str(room).strip()
+            else:
+                raw_label = title_clean
+
+            if not raw_label:
+                continue
+
+            dedup_key = f"{time_label}|{raw_label}"
+            if dedup_key not in seen[day_name]:
+                seen[day_name].add(dedup_key)
+                schedule[day_name].append({
+                    "time": time_label,
+                    "raw": raw_label,
+                    "_sort": start_dt.strftime("%H:%M") if start_dt else time_label
+                })
+
+        for d in days_order:
+            schedule[d].sort(key=lambda x: x.get("_sort", ""))
+            for entry in schedule[d]:
+                entry.pop("_sort", None)
+
+    except Exception:
+        pass
 
     return schedule
 
@@ -224,8 +306,6 @@ def get_attendance():
         if "site/login" in login_res.url and "Logout" not in login_res.text:
             return jsonify({"status": "error", "message": "Invalid Roll No, Password, or CAPTCHA."})
 
-        dash_soup = BeautifulSoup(login_res.text, 'html.parser')
-
         att_res = session.get(ATTENDANCE_URL, headers=HEADERS, timeout=15)
         soup = BeautifulSoup(att_res.text, 'html.parser')
 
@@ -255,7 +335,7 @@ def get_attendance():
         if not subjects:
             return jsonify({"status": "error", "message": "Could not parse attendance records."})
 
-        timetable = fetch_timetable(session, dash_soup)
+        timetable = fetch_timetable(session, att_res.text)
 
         total_attended = sum(s["attended"] for s in subjects)
         total_classes = sum(s["total"] for s in subjects)
