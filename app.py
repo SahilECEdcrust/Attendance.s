@@ -17,10 +17,17 @@ ATTENDANCE_URL = f"{BASE_URL}/index.php/student-attendance/attendance/index"
 TIMETABLE_PAGE_URL = f"{BASE_URL}/index.php/student-attendance/attendance/view-time-table"
 CLASSES_API_URL = f"{BASE_URL}/index.php/student-attendance/attendance-api/get-classes-of-student"
 
+# Standard browser headers for login & HTML pages (NO X-Requested-With!)
 HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+}
+
+# AJAX headers used ONLY for the JSON timetable API
+API_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "Accept": "application/json, text/javascript, */*; q=0.01",
-    "X-Requested-With": "XMLHttpRequest"
+    "X-Requested-With": "XMLHttpRequest",
+    "Referer": TIMETABLE_PAGE_URL
 }
 
 @app.route('/')
@@ -181,7 +188,7 @@ def fetch_timetable(session, att_html=""):
 
         payload_items = []
         for api_url, params in candidate_requests:
-            api_res = session.get(api_url, params=params, headers=HEADERS, timeout=12)
+            api_res = session.get(api_url, params=params, headers=API_HEADERS, timeout=12)
             if api_res.status_code != 200:
                 continue
             try:
@@ -243,14 +250,12 @@ def fetch_timetable(session, att_html=""):
             )
             room = item.get("room") or item.get("room_no") or item.get("venue") or item.get("location") or ""
 
-            # If Samarth embeds details in an extendedProps or description dict/string
             ext = item.get("extendedProps") if isinstance(item.get("extendedProps"), dict) else {}
             if not title:
                 title = ext.get("title") or ext.get("course_name") or ext.get("subject") or ""
             if not room:
                 room = ext.get("room") or ext.get("venue") or ""
 
-            # Strip HTML tags if title has HTML
             title_clean = BeautifulSoup(str(title), "html.parser").get_text(" - ", strip=True)
             if room and str(room).strip() and str(room).strip().lower() not in title_clean.lower():
                 raw_label = f"{title_clean} ({str(room).strip()})" if title_clean else str(room).strip()
