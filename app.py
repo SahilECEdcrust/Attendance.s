@@ -125,6 +125,90 @@ def fetch_single_subject(session, row_data):
         return None
     return None
 
+def fetch_timetable(session, dashboard_soup):
+    """Auto-discovers and parses the e-Samarth weekly timetable."""
+    days_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+    schedule = {d: [] for d in days_order}
+
+    candidate_urls = []
+    for a in dashboard_soup.find_all('a', href=True):
+        href = a['href']
+        text = a.get_text(" ", strip=True).lower()
+        if any(k in href.lower() or k in text for k in ["timetable", "time table", "routine", "schedule"]):
+            full_url = href if href.startswith("http") else BASE_URL + href
+            if full_url not in candidate_urls:
+                candidate_urls.append(full_url)
+
+    fallback_paths = [
+        "/index.php/student/timetable/index",
+        "/index.php/student/timetable/view",
+        "/index.php/student-timetable/timetable/index",
+        "/index.php/timetable/student/index",
+        "/index.php/academic/timetable/student",
+        "/index.php/course-registration/student-timetable/index"
+    ]
+    for path in fallback_paths:
+        u = BASE_URL + path
+        if u not in candidate_urls:
+            candidate_urls.append(u)
+
+    for url in candidate_urls:
+        try:
+            res = session.get(url, headers=HEADERS, timeout=12)
+            if res.status_code != 200 or "site/login" in res.url:
+                continue
+
+            soup = BeautifulSoup(res.text, 'html.parser')
+
+            for table in soup.find_all('table'):
+                rows = table.find_all('tr')
+                if len(rows) < 2:
+                    continue
+
+                headers = [th.get_text(" ", strip=True) for th in rows[0].find_all(['th', 'td'])]
+                found_any = False
+
+                # Case A: Rows = Days, Columns = Time Slots
+                for row in rows[1:]:
+                    cols = [c.get_text(" | ", strip=True) for c in row.find_all(['td', 'th'])]
+                    if not cols:
+                        continue
+                    first_cell = cols[0].strip().title()
+                    matched_day = next((d for d in days_order if d.lower() in first_cell.lower()), None)
+                    if matched_day:
+                        for idx in range(1, len(cols)):
+                            cell_text = cols[idx].strip()
+                            if cell_text and cell_text not in ["-", "—", "Break", "Lunch", "N/A", "Free"]:
+                                found_any = True
+                                slot_time = headers[idx] if idx < len(headers) else f"Period {idx}"
+                                schedule[matched_day].append({"time": slot_time, "raw": cell_text})
+
+                # Case B: Columns = Days, Rows = Time Slots
+                if not found_any:
+                    day_col_map = {}
+                    for idx, h in enumerate(headers):
+                        matched_day = next((d for d in days_order if d.lower() in h.lower()), None)
+                        if matched_day:
+                            day_col_map[idx] = matched_day
+
+                    if day_col_map:
+                        for row in rows[1:]:
+                            cols = [c.get_text(" | ", strip=True) for c in row.find_all(['td', 'th'])]
+                            slot_time = cols[0] if cols else "Slot"
+                            for col_idx, day_name in day_col_map.items():
+                                if col_idx < len(cols):
+                                    cell_text = cols[col_idx].strip()
+                                    if cell_text and cell_text not in ["-", "—", "Break", "Lunch", "N/A", "Free"]:
+                                        found_any = True
+                                        schedule[day_name].append({"time": slot_time, "raw": cell_text})
+
+                if found_any:
+                    return schedule
+        except Exception:
+            continue
+
+    return schedule
+
 @app.route('/get-attendance', methods=['POST'])
 def get_attendance():
     data = request.json
@@ -151,6 +235,8 @@ def get_attendance():
         login_res = session.post(LOGIN_URL, data=payload, headers=HEADERS, timeout=15)
         if "site/login" in login_res.url and "Logout" not in login_res.text:
             return jsonify({"status": "error", "message": "Invalid Roll No, Password, or CAPTCHA."})
+
+        dash_soup = BeautifulSoup(login_res.text, 'html.parser')
 
         att_res = session.get(ATTENDANCE_URL, headers=HEADERS, timeout=15)
         soup = BeautifulSoup(att_res.text, 'html.parser')
@@ -181,6 +267,8 @@ def get_attendance():
         if not subjects:
             return jsonify({"status": "error", "message": "Could not parse attendance records."})
 
+        timetable = fetch_timetable(session, dash_soup)
+
         total_attended = sum(s["attended"] for s in subjects)
         total_classes = sum(s["total"] for s in subjects)
         overall_percent = round((total_attended / max(total_classes, 1)) * 100, 2)
@@ -193,7 +281,8 @@ def get_attendance():
                 "total": total_classes,
                 "percentage": overall_percent
             },
-            "subjects": subjects
+            "subjects": subjects,
+            "timetable": timetable
         })
 
     except Exception as e:

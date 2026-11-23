@@ -228,7 +228,7 @@
             const today = weekdays[new Date().getDay()];
             selectedDay = (today === "Sunday") ? "Monday" : today;
 
-            const cached = localStorage.getItem("dcrust_att_cache_v5");
+            const cached = localStorage.getItem("dcrust_att_cache_v6");
             if (cached) {
                 appData = JSON.parse(cached);
                 renderDashboard();
@@ -270,22 +270,70 @@
             renderTimetable();
         }
 
+        function getCustomTimetable() {
+            try {
+                return JSON.parse(localStorage.getItem("dcrust_custom_tt") || "{}");
+            } catch {
+                return {};
+            }
+        }
+
+        function addCustomClass() {
+            const subs = appData?.subjects || [];
+            const subNames = subs.map((s, i) => `${i + 1}. ${s.name} (${s.code || s.tag})`).join("\n");
+            const pick = prompt(`Add class for ${selectedDay}:\nEnter subject number or custom name:\n${subNames}`);
+            if (!pick || !pick.trim()) return;
+
+            const timeSlot = prompt("Enter time slot (e.g. 09:00 AM - 10:00 AM):", "09:00 AM - 10:00 AM") || "Scheduled Slot";
+            const num = parseInt(pick.trim(), 10);
+            let label = pick.trim();
+            if (!isNaN(num) && num >= 1 && num <= subs.length) {
+                const s = subs[num - 1];
+                label = `${s.name} (${s.code || s.tag})`;
+            }
+
+            const customTT = getCustomTimetable();
+            if (!customTT[selectedDay]) customTT[selectedDay] = [];
+            customTT[selectedDay].push({ time: timeSlot.trim(), raw: label, custom: true });
+            localStorage.setItem("dcrust_custom_tt", JSON.stringify(customTT));
+            renderTimetable();
+        }
+
+        function removeCustomClass(index) {
+            const customTT = getCustomTimetable();
+            const portalClasses = (appData?.timetable?.[selectedDay] || []);
+            const customIdx = index - portalClasses.length;
+            if (customIdx >= 0 && customTT[selectedDay]) {
+                customTT[selectedDay].splice(customIdx, 1);
+                localStorage.setItem("dcrust_custom_tt", JSON.stringify(customTT));
+                renderTimetable();
+            }
+        }
+
         function renderTimetable() {
             const list = document.getElementById('timetableList');
-            const tt = appData?.timetable || {};
-            const classes = tt[selectedDay] || [];
+            const portalClasses = appData?.timetable?.[selectedDay] || [];
+            const customClasses = getCustomTimetable()[selectedDay] || [];
+            const classes = [...portalClasses, ...customClasses];
+
+            const addBtnHtml = `
+                <button onclick="addCustomClass()" class="w-full py-2.5 rounded-xl border border-dashed border-slate-700 hover:border-indigo-500 text-xs font-semibold text-indigo-400 transition">
+                    + Add Class to ${selectedDay}
+                </button>
+            `;
 
             if (!classes.length) {
                 list.innerHTML = `
-                    <div class="glass p-6 rounded-2xl border border-slate-800 text-center space-y-2">
-                        <p class="text-sm font-semibold text-slate-200">No classes found for ${selectedDay}</p>
-                        <p class="text-xs text-slate-400">If your timetable isn't published on e-Samarth yet, this stays empty. Click ↻ Sync if recently updated.</p>
+                    <div class="glass p-6 rounded-2xl border border-slate-800 text-center space-y-2 mb-3">
+                        <p class="text-sm font-semibold text-slate-200">No e-Samarth timetable found for ${selectedDay}</p>
+                        <p class="text-xs text-slate-400">Add your classes below to track live attendance right on your schedule.</p>
                     </div>
+                    ${addBtnHtml}
                 `;
                 return;
             }
 
-            list.innerHTML = classes.map(slot => {
+            list.innerHTML = classes.map((slot, idx) => {
                 const matchedSub = (appData.subjects || []).find(s =>
                     (s.code && slot.raw.toUpperCase().includes(s.code.toUpperCase())) ||
                     (s.name && slot.raw.toLowerCase().includes(s.name.toLowerCase().slice(0, 12)))
@@ -300,16 +348,20 @@
                         : `<span class="text-[10px] font-bold px-2.5 py-1 rounded-md bg-rose-500/15 text-rose-400 border border-rose-500/30">${pct}% • Attend!</span>`;
                 }
 
+                const delBtn = slot.custom
+                    ? `<button onclick="removeCustomClass(${idx})" class="text-[10px] text-rose-400 hover:underline ml-2">Remove</button>`
+                    : "";
+
                 return `
                     <div class="glass p-4 rounded-2xl border border-slate-800 flex justify-between items-center gap-3">
                         <div>
-                            <span class="text-[11px] font-semibold text-indigo-400 block">${slot.time}</span>
+                            <span class="text-[11px] font-semibold text-indigo-400 block">${slot.time} ${delBtn}</span>
                             <p class="text-sm font-bold text-white mt-1 leading-snug">${slot.raw}</p>
                         </div>
                         <div class="shrink-0">${statusBadge}</div>
                     </div>
                 `;
-            }).join('');
+            }).join('') + `<div class="pt-1">${addBtnHtml}</div>`;
         }
 
         function showLogin() {
@@ -322,7 +374,7 @@
         }
 
         function logout() {
-            localStorage.removeItem("dcrust_att_cache_v5");
+            localStorage.removeItem("dcrust_att_cache_v6");
             appData = null;
             simState = {};
             showLogin();
@@ -373,7 +425,7 @@
                     data.timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                     appData = data;
                     simState = {};
-                    localStorage.setItem("dcrust_att_cache_v5", JSON.stringify(data));
+                    localStorage.setItem("dcrust_att_cache_v6", JSON.stringify(data));
                     renderDashboard();
                 } else {
                     alert(data.message);
@@ -420,7 +472,6 @@
             renderDashboard();
         }
 
-        // Converts any date format into a timestamp so latest dates sort first
         function parseSortableDate(rawDate) {
             if (!rawDate) return 0;
             const iso = rawDate.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
@@ -496,7 +547,6 @@
         function renderModalLogs() {
             const sub = appData.subjects[selectedSubjectIndex];
             const container = document.getElementById('modalLogsList');
-            // Sort descending: newest/latest date first, older dates downward
             const logs = [...(sub.logs || [])].sort((a, b) => parseSortableDate(b.date) - parseSortableDate(a.date));
 
             const filtered = modalLogFilter === "ALL" 
