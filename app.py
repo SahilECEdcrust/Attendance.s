@@ -2,7 +2,7 @@ from flask import Flask, render_template, request, jsonify
 import requests
 from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta
+from datetime import datetime
 import base64
 import uuid
 import re
@@ -17,12 +17,10 @@ ATTENDANCE_URL = f"{BASE_URL}/index.php/student-attendance/attendance/index"
 TIMETABLE_PAGE_URL = f"{BASE_URL}/index.php/student-attendance/attendance/view-time-table"
 CLASSES_API_URL = f"{BASE_URL}/index.php/student-attendance/attendance-api/get-classes-of-student"
 
-# Standard browser headers for login & HTML pages (NO X-Requested-With!)
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 }
 
-# AJAX headers used ONLY for the JSON timetable API
 API_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "Accept": "application/json, text/javascript, */*; q=0.01",
@@ -138,13 +136,17 @@ def fetch_single_subject(session, row_data):
     return None
 
 def extract_student_token(html_text):
-    """Extracts student_id token from view-time-table or attendance HTML."""
+    """Extracts student_id token from HTML/JS."""
+    if not html_text:
+        return None
     patterns = [
-        r'get-classes-of-student\?[^"\'\s<>]*student_id=([A-Za-z0-9_-]+)',
-        r'student_id["\']?\s*[:=]\s*["\']([A-Za-z0-9_-]{12,})["\']',
+        r'get-classes-of-student[^"\'\s<>]*student_id(?:=|%3D)([A-Za-z0-9_-]{16,})',
+        r'student[_-]?id["\']?\s*[:=]\s*["\']([A-Za-z0-9_-]{16,})["\']',
+        r'data-student-id=["\']([A-Za-z0-9_-]{16,})["\']',
+        r'\b([a-f0-9]{40,80})\b',
     ]
     for pat in patterns:
-        m = re.search(pat, html_text)
+        m = re.search(pat, html_text, re.I)
         if m:
             return m.group(1)
     return None
@@ -157,55 +159,57 @@ def parse_dt(val):
     try:
         return datetime.fromisoformat(cleaned)
     except Exception:
-        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%d-%m-%Y %H:%M:%S", "%d-%m-%Y %H:%M"):
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%d-%m-%Y %H:%M:%S", "%d-%m-%Y %H:%M", "%Y-%m-%d"):
             try:
                 return datetime.strptime(cleaned[:19], fmt)
             except Exception:
                 continue
     return None
 
-def fetch_timetable(session, att_html=""):
+def fetch_timetable(session, att_html="", login_html=""):
     """Fetches student classes from e-Samarth attendance-api/get-classes-of-student."""
     days_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
     schedule = {d: [] for d in days_order}
+    debug = {"token_found": False, "api_status": None, "count": 0, "sample_keys": []}
 
     try:
         tt_res = session.get(TIMETABLE_PAGE_URL, headers=HEADERS, timeout=12)
-        combined_html = (tt_res.text or "") + "\n" + (att_html or "")
+        combined_html = (tt_res.text or "") + "\n" + (att_html or "") + "\n" + (login_html or "")
         student_token = extract_student_token(combined_html)
 
         if not student_token:
-            return schedule
+            debug["note"] = "student_id not found in HTML"
+            print("TT_DEBUG:", debug, flush=True)
+            return schedule, debug
 
-        now = datetime.now()
-        week_start = (now - timedelta(days=now.weekday())).strftime("%Y-%m-%d")
-        week_end = (now + timedelta(days=14)).strftime("%Y-%m-%d")
+        debug["token_found"] = True
 
-        candidate_requests = [
-            (CLASSES_API_URL, {"student_id": student_token, "start": week_start, "end": week_end}),
-            (CLASSES_API_URL, {"student_id": student_token}),
-        ]
+        api_res = session.get(
+            CLASSES_API_URL,
+            params={"student_id": student_token},
+            headers=API_HEADERS,
+            timeout=15
+        )
+        debug["api_status"] = api_res.status_code
 
+        if api_res.status_code != 200:
+            debug["note"] = api_res.text[:150]
+            print("TT_DEBUG:", debug, flush=True)
+            return schedule, debug
+
+        data = api_res.json()
         payload_items = []
-        for api_url, params in candidate_requests:
-            api_res = session.get(api_url, params=params, headers=API_HEADERS, timeout=12)
-            if api_res.status_code != 200:
-                continue
-            try:
-                data = api_res.json()
-            except Exception:
-                continue
+        if isinstance(data, list):
+            payload_items = data
+        elif isinstance(data, dict):
+            for key in ("data", "classes", "events", "timetable", "records", "result"):
+                if isinstance(data.get(key), list):
+                    payload_items = data[key]
+                    break
 
-            if isinstance(data, list):
-                payload_items = data
-            elif isinstance(data, dict):
-                for key in ("data", "classes", "events", "timetable", "records", "result"):
-                    if isinstance(data.get(key), list):
-                        payload_items = data[key]
-                        break
-
-            if payload_items:
-                break
+        debug["count"] = len(payload_items)
+        if payload_items and isinstance(payload_items[0], dict):
+            debug["sample_keys"] = list(payload_items[0].keys())
 
         seen = {d: set() for d in days_order}
 
@@ -213,15 +217,17 @@ def fetch_timetable(session, att_html=""):
             if not isinstance(item, dict):
                 continue
 
+            ext = item.get("extendedProps") if isinstance(item.get("extendedProps"), dict) else {}
+
             start_dt = parse_dt(
-                item.get("start") or item.get("start_time") or item.get("startTime") or item.get("from_time") or item.get("date")
+                item.get("start") or item.get("start_time") or item.get("startTime") or item.get("from_time") or item.get("date") or ext.get("start")
             )
             end_dt = parse_dt(
-                item.get("end") or item.get("end_time") or item.get("endTime") or item.get("to_time")
+                item.get("end") or item.get("end_time") or item.get("endTime") or item.get("to_time") or ext.get("end")
             )
 
             day_name = None
-            raw_day = str(item.get("day") or item.get("day_name") or item.get("weekday") or "").strip().title()
+            raw_day = str(item.get("day") or item.get("day_name") or item.get("weekday") or ext.get("day") or "").strip().title()
             if raw_day in schedule:
                 day_name = raw_day
             elif start_dt:
@@ -232,12 +238,12 @@ def fetch_timetable(session, att_html=""):
             if not day_name:
                 continue
 
-            if start_dt and end_dt:
+            if start_dt and end_dt and (start_dt.hour or start_dt.minute or end_dt.hour or end_dt.minute):
                 time_label = f"{start_dt.strftime('%I:%M %p')} - {end_dt.strftime('%I:%M %p')}"
-            elif start_dt:
+            elif start_dt and (start_dt.hour or start_dt.minute):
                 time_label = start_dt.strftime("%I:%M %p")
             else:
-                time_label = str(item.get("time") or item.get("slot") or item.get("timing") or "Scheduled Slot")
+                time_label = str(item.get("time") or item.get("slot") or item.get("timing") or ext.get("time") or "Scheduled Slot")
 
             title = (
                 item.get("title")
@@ -246,15 +252,20 @@ def fetch_timetable(session, att_html=""):
                 or item.get("course")
                 or item.get("name")
                 or item.get("label")
+                or ext.get("title")
+                or ext.get("course_name")
+                or ext.get("subject")
                 or ""
             )
-            room = item.get("room") or item.get("room_no") or item.get("venue") or item.get("location") or ""
-
-            ext = item.get("extendedProps") if isinstance(item.get("extendedProps"), dict) else {}
-            if not title:
-                title = ext.get("title") or ext.get("course_name") or ext.get("subject") or ""
-            if not room:
-                room = ext.get("room") or ext.get("venue") or ""
+            room = (
+                item.get("room")
+                or item.get("room_no")
+                or item.get("venue")
+                or item.get("location")
+                or ext.get("room")
+                or ext.get("venue")
+                or ""
+            )
 
             title_clean = BeautifulSoup(str(title), "html.parser").get_text(" - ", strip=True)
             if room and str(room).strip() and str(room).strip().lower() not in title_clean.lower():
@@ -279,10 +290,12 @@ def fetch_timetable(session, att_html=""):
             for entry in schedule[d]:
                 entry.pop("_sort", None)
 
-    except Exception:
-        pass
+        print("TT_DEBUG:", debug, flush=True)
+    except Exception as e:
+        debug["error"] = str(e)
+        print("TT_DEBUG:", debug, flush=True)
 
-    return schedule
+    return schedule, debug
 
 @app.route('/get-attendance', methods=['POST'])
 def get_attendance():
@@ -322,7 +335,7 @@ def get_attendance():
                 if len(cols) >= 6:
                     class_type = cols[1].get_text(strip=True)
                     course_full = cols[2].get_text(strip=True)
-                    
+
                     code = course_full.split(":")[0].strip() if ":" in course_full else ""
                     clean_name = course_full.split(":")[-1].strip().title() if ":" in course_full else course_full
                     tag = "Lab" if "Lab" in class_type else ("Tute" if "Tute" in class_type else "Theory")
@@ -340,7 +353,7 @@ def get_attendance():
         if not subjects:
             return jsonify({"status": "error", "message": "Could not parse attendance records."})
 
-        timetable = fetch_timetable(session, att_res.text)
+        timetable, tt_debug = fetch_timetable(session, att_res.text, login_res.text)
 
         total_attended = sum(s["attended"] for s in subjects)
         total_classes = sum(s["total"] for s in subjects)
@@ -355,7 +368,8 @@ def get_attendance():
                 "percentage": overall_percent
             },
             "subjects": subjects,
-            "timetable": timetable
+            "timetable": timetable,
+            "tt_debug": tt_debug
         })
 
     except Exception as e:
