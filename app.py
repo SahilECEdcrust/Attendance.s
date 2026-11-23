@@ -2,7 +2,7 @@ from flask import Flask, render_template, request, jsonify
 import requests
 from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 import base64
 import uuid
 import re
@@ -16,6 +16,8 @@ LOGIN_URL = f"{BASE_URL}/index.php/site/login"
 ATTENDANCE_URL = f"{BASE_URL}/index.php/student-attendance/attendance/index"
 TIMETABLE_PAGE_URL = f"{BASE_URL}/index.php/student-attendance/attendance/view-time-table"
 CLASSES_API_URL = f"{BASE_URL}/index.php/student-attendance/attendance-api/get-classes-of-student"
+
+IST = timezone(timedelta(hours=5, minutes=30))
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -152,25 +154,33 @@ def extract_student_token(html_text):
     return None
 
 def parse_dt(val):
-    """Parses ISO or standard datetime strings into datetime object."""
-    if not val or not isinstance(val, str):
+    """Parses Unix timestamps (int/float/numeric str) or ISO/date strings into IST datetime."""
+    if val is None or val == "":
         return None
-    cleaned = val.replace("Z", "+00:00").strip()
-    try:
-        return datetime.fromisoformat(cleaned)
-    except Exception:
-        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%d-%m-%Y %H:%M:%S", "%d-%m-%Y %H:%M", "%Y-%m-%d"):
-            try:
-                return datetime.strptime(cleaned[:19], fmt)
-            except Exception:
-                continue
+    if isinstance(val, (int, float)):
+        ts = val / 1000.0 if val > 1e11 else float(val)
+        return datetime.fromtimestamp(ts, tz=IST)
+    if isinstance(val, str):
+        s = val.strip()
+        if re.fullmatch(r'\d{10,13}', s):
+            ts = int(s) / 1000.0 if len(s) > 11 else float(s)
+            return datetime.fromtimestamp(ts, tz=IST)
+        cleaned = s.replace("Z", "+00:00")
+        try:
+            dt = datetime.fromisoformat(cleaned)
+            return dt.astimezone(IST) if dt.tzinfo else dt.replace(tzinfo=IST)
+        except Exception:
+            for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%d-%m-%Y %H:%M:%S", "%d-%m-%Y %H:%M", "%Y-%m-%d"):
+                try:
+                    return datetime.strptime(cleaned[:19], fmt).replace(tzinfo=IST)
+                except Exception:
+                    continue
     return None
 
 def fetch_timetable(session, att_html="", login_html=""):
-    """Fetches student classes from e-Samarth attendance-api/get-classes-of-student."""
+    """Fetches and builds a weekly schedule (Mon-Sat) from get-classes-of-student JSON."""
     days_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
     schedule = {d: [] for d in days_order}
-    debug = {"token_found": False, "api_status": None, "count": 0, "sample_keys": []}
 
     try:
         tt_res = session.get(TIMETABLE_PAGE_URL, headers=HEADERS, timeout=12)
@@ -178,11 +188,7 @@ def fetch_timetable(session, att_html="", login_html=""):
         student_token = extract_student_token(combined_html)
 
         if not student_token:
-            debug["note"] = "student_id not found in HTML"
-            print("TT_DEBUG:", debug, flush=True)
-            return schedule, debug
-
-        debug["token_found"] = True
+            return schedule
 
         api_res = session.get(
             CLASSES_API_URL,
@@ -190,12 +196,8 @@ def fetch_timetable(session, att_html="", login_html=""):
             headers=API_HEADERS,
             timeout=15
         )
-        debug["api_status"] = api_res.status_code
-
         if api_res.status_code != 200:
-            debug["note"] = api_res.text[:150]
-            print("TT_DEBUG:", debug, flush=True)
-            return schedule, debug
+            return schedule
 
         data = api_res.json()
         payload_items = []
@@ -207,71 +209,43 @@ def fetch_timetable(session, att_html="", login_html=""):
                     payload_items = data[key]
                     break
 
-        debug["count"] = len(payload_items)
-        if payload_items and isinstance(payload_items[0], dict):
-            debug["sample_keys"] = list(payload_items[0].keys())
-
         seen = {d: set() for d in days_order}
 
         for item in payload_items:
             if not isinstance(item, dict):
                 continue
 
-            ext = item.get("extendedProps") if isinstance(item.get("extendedProps"), dict) else {}
+            start_dt = parse_dt(item.get("start") or item.get("start_time") or item.get("date"))
+            end_dt = parse_dt(item.get("end") or item.get("end_time"))
 
-            start_dt = parse_dt(
-                item.get("start") or item.get("start_time") or item.get("startTime") or item.get("from_time") or item.get("date") or ext.get("start")
-            )
-            end_dt = parse_dt(
-                item.get("end") or item.get("end_time") or item.get("endTime") or item.get("to_time") or ext.get("end")
-            )
-
-            day_name = None
-            raw_day = str(item.get("day") or item.get("day_name") or item.get("weekday") or ext.get("day") or "").strip().title()
-            if raw_day in schedule:
-                day_name = raw_day
-            elif start_dt:
-                wk_name = start_dt.strftime("%A")
-                if wk_name in schedule:
-                    day_name = wk_name
-
-            if not day_name:
+            if not start_dt:
                 continue
 
-            if start_dt and end_dt and (start_dt.hour or start_dt.minute or end_dt.hour or end_dt.minute):
+            day_name = start_dt.strftime("%A")
+            if day_name not in schedule:
+                continue
+
+            if end_dt:
                 time_label = f"{start_dt.strftime('%I:%M %p')} - {end_dt.strftime('%I:%M %p')}"
-            elif start_dt and (start_dt.hour or start_dt.minute):
+            else:
                 time_label = start_dt.strftime("%I:%M %p")
-            else:
-                time_label = str(item.get("time") or item.get("slot") or item.get("timing") or ext.get("time") or "Scheduled Slot")
 
-            title = (
-                item.get("title")
-                or item.get("course_name")
-                or item.get("subject_name")
-                or item.get("course")
-                or item.get("name")
-                or item.get("label")
-                or ext.get("title")
-                or ext.get("course_name")
-                or ext.get("subject")
-                or ""
-            )
-            room = (
-                item.get("room")
-                or item.get("room_no")
-                or item.get("venue")
-                or item.get("location")
-                or ext.get("room")
-                or ext.get("venue")
-                or ""
-            )
+            slot_title = str(item.get("title") or "").strip()
+            desc = str(item.get("desc") or item.get("description") or "").strip()
 
-            title_clean = BeautifulSoup(str(title), "html.parser").get_text(" - ", strip=True)
-            if room and str(room).strip() and str(room).strip().lower() not in title_clean.lower():
-                raw_label = f"{title_clean} ({str(room).strip()})" if title_clean else str(room).strip()
+            # desc format is typically "HMHUM101D : ENGLISH FOR TECHNICAL WRITING"
+            if ":" in desc:
+                code_part, sub_part = [p.strip() for p in desc.split(":", 1)]
+                sub_title = f"{sub_part.title()} ({code_part})"
+            elif desc:
+                sub_title = desc.title()
             else:
-                raw_label = title_clean
+                sub_title = ""
+
+            if sub_title and slot_title:
+                raw_label = f"{sub_title} • {slot_title}"
+            else:
+                raw_label = sub_title or slot_title
 
             if not raw_label:
                 continue
@@ -282,7 +256,7 @@ def fetch_timetable(session, att_html="", login_html=""):
                 schedule[day_name].append({
                     "time": time_label,
                     "raw": raw_label,
-                    "_sort": start_dt.strftime("%H:%M") if start_dt else time_label
+                    "_sort": start_dt.strftime("%H:%M")
                 })
 
         for d in days_order:
@@ -290,12 +264,10 @@ def fetch_timetable(session, att_html="", login_html=""):
             for entry in schedule[d]:
                 entry.pop("_sort", None)
 
-        print("TT_DEBUG:", debug, flush=True)
-    except Exception as e:
-        debug["error"] = str(e)
-        print("TT_DEBUG:", debug, flush=True)
+    except Exception:
+        pass
 
-    return schedule, debug
+    return schedule
 
 @app.route('/get-attendance', methods=['POST'])
 def get_attendance():
@@ -353,7 +325,7 @@ def get_attendance():
         if not subjects:
             return jsonify({"status": "error", "message": "Could not parse attendance records."})
 
-        timetable, tt_debug = fetch_timetable(session, att_res.text, login_res.text)
+        timetable = fetch_timetable(session, att_res.text, login_res.text)
 
         total_attended = sum(s["attended"] for s in subjects)
         total_classes = sum(s["total"] for s in subjects)
@@ -368,8 +340,7 @@ def get_attendance():
                 "percentage": overall_percent
             },
             "subjects": subjects,
-            "timetable": timetable,
-            "tt_debug": tt_debug
+            "timetable": timetable
         })
 
     except Exception as e:
