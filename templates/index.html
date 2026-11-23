@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#090d16">
-    <title>DCRUST Attendance • Smart Bunk, History & PYQs</title>
+    <title>DCRUST Attendance • Smart Bunk, Timetable & PYQs</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
@@ -38,7 +38,7 @@
             <div id="loginBox" class="glass p-6 rounded-3xl shadow-2xl">
                 <div class="mb-6">
                     <h1 class="text-2xl font-extrabold text-white">Check e-Samarth Attendance</h1>
-                    <p class="text-slate-400 text-xs mt-1">Real-time attendance, date-wise history & DCRUST PYQs.</p>
+                    <p class="text-slate-400 text-xs mt-1">Real-time attendance, timetable, date-wise history & PYQs.</p>
                 </div>
 
                 <div class="space-y-4">
@@ -73,7 +73,7 @@
                 <p id="statusText" class="text-xs text-amber-400 text-center mt-3"></p>
                 <div class="mt-5 pt-4 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500">
                     <span>🔒 Zero credential storage</span>
-                    <span>📚 Subject-wise PYQs</span>
+                    <span>📅 Timetable + PYQs</span>
                 </div>
             </div>
 
@@ -109,20 +109,46 @@
                     </div>
                 </div>
 
-                <!-- Filter Pills -->
-                <div class="flex gap-2 overflow-x-auto pb-1">
-                    <button onclick="filterCards('ALL', this)" class="filter-pill text-xs font-medium px-3.5 py-1.5 rounded-full bg-slate-100 text-slate-900">All Subjects</button>
-                    <button onclick="filterCards('LOW', this)" class="filter-pill text-xs font-medium px-3.5 py-1.5 rounded-full bg-slate-800 text-slate-300">⚠️ Below Goal</button>
-                    <button onclick="filterCards('Theory', this)" class="filter-pill text-xs font-medium px-3.5 py-1.5 rounded-full bg-slate-800 text-slate-300">Theory</button>
-                    <button onclick="filterCards('Lab', this)" class="filter-pill text-xs font-medium px-3.5 py-1.5 rounded-full bg-slate-800 text-slate-300">Labs</button>
+                <!-- MAIN VIEW SWITCHER: SUBJECTS vs TIMETABLE -->
+                <div class="grid grid-cols-2 gap-2 bg-slate-900/90 p-1.5 rounded-2xl border border-slate-800">
+                    <button onclick="switchMainTab('SUBJECTS')" id="tabSubjects" class="py-2.5 text-xs font-bold rounded-xl bg-indigo-600 text-white shadow transition">
+                        📚 Subjects & PYQs
+                    </button>
+                    <button onclick="switchMainTab('TIMETABLE')" id="tabTimetable" class="py-2.5 text-xs font-bold rounded-xl text-slate-400 hover:text-white transition">
+                        🗓️ Timetable
+                    </button>
                 </div>
 
-                <p class="text-[11px] text-slate-400 flex items-center gap-1.5 px-1">
-                    <span>💡</span> Tap any subject card to view date-wise attendance & PYQs.
-                </p>
+                <!-- VIEW 1: SUBJECTS SECTION -->
+                <div id="subjectsSection" class="space-y-4">
+                    <div class="flex gap-2 overflow-x-auto pb-1">
+                        <button onclick="filterCards('ALL', this)" class="filter-pill text-xs font-medium px-3.5 py-1.5 rounded-full bg-slate-100 text-slate-900">All Subjects</button>
+                        <button onclick="filterCards('LOW', this)" class="filter-pill text-xs font-medium px-3.5 py-1.5 rounded-full bg-slate-800 text-slate-300">⚠️ Below Goal</button>
+                        <button onclick="filterCards('Theory', this)" class="filter-pill text-xs font-medium px-3.5 py-1.5 rounded-full bg-slate-800 text-slate-300">Theory</button>
+                        <button onclick="filterCards('Lab', this)" class="filter-pill text-xs font-medium px-3.5 py-1.5 rounded-full bg-slate-800 text-slate-300">Labs</button>
+                    </div>
 
-                <!-- Subject Cards Container -->
-                <div id="subjectsList" class="space-y-3.5"></div>
+                    <p class="text-[11px] text-slate-400 flex items-center gap-1.5 px-1">
+                        <span>💡</span> Tap any subject card to view latest-first dates & PYQs.
+                    </p>
+
+                    <div id="subjectsList" class="space-y-3.5"></div>
+                </div>
+
+                <!-- VIEW 2: TIMETABLE SECTION -->
+                <div id="timetableSection" class="hidden space-y-4">
+                    <div class="flex gap-1.5 overflow-x-auto pb-1" id="daySelectorBar">
+                        <button onclick="selectTimetableDay('Monday', this)" class="tt-day-btn text-xs font-semibold px-3.5 py-2 rounded-xl bg-slate-800 text-slate-300">Mon</button>
+                        <button onclick="selectTimetableDay('Tuesday', this)" class="tt-day-btn text-xs font-semibold px-3.5 py-2 rounded-xl bg-slate-800 text-slate-300">Tue</button>
+                        <button onclick="selectTimetableDay('Wednesday', this)" class="tt-day-btn text-xs font-semibold px-3.5 py-2 rounded-xl bg-slate-800 text-slate-300">Wed</button>
+                        <button onclick="selectTimetableDay('Thursday', this)" class="tt-day-btn text-xs font-semibold px-3.5 py-2 rounded-xl bg-slate-800 text-slate-300">Thu</button>
+                        <button onclick="selectTimetableDay('Friday', this)" class="tt-day-btn text-xs font-semibold px-3.5 py-2 rounded-xl bg-slate-800 text-slate-300">Fri</button>
+                        <button onclick="selectTimetableDay('Saturday', this)" class="tt-day-btn text-xs font-semibold px-3.5 py-2 rounded-xl bg-slate-800 text-slate-300">Sat</button>
+                    </div>
+
+                    <div id="timetableList" class="space-y-3"></div>
+                </div>
+
             </div>
         </main>
     </div>
@@ -139,7 +165,6 @@
     <div id="subjectModal" class="fixed inset-0 z-50 hidden bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onclick="closeModalOnBackdrop(event)">
         <div class="bg-[#0f1623] border border-slate-800 w-full max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[88vh] flex flex-col shadow-2xl overflow-hidden">
             
-            <!-- Modal Header -->
             <div class="p-5 border-b border-slate-800 flex justify-between items-start gap-3">
                 <div>
                     <div class="flex items-center gap-2">
@@ -151,7 +176,6 @@
                 <button onclick="closeSubjectModal()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center text-sm">✕</button>
             </div>
 
-            <!-- Quick Count Strip -->
             <div class="grid grid-cols-3 gap-2 px-5 py-3 bg-slate-900/60 border-b border-slate-800/80 text-center">
                 <div class="bg-emerald-500/10 border border-emerald-500/20 rounded-xl py-2">
                     <p id="modalPresentCount" class="text-base font-extrabold text-emerald-400">0</p>
@@ -167,7 +191,6 @@
                 </div>
             </div>
 
-            <!-- SMART PYQ BUTTONS -->
             <div class="px-5 py-3 bg-indigo-950/30 border-b border-slate-800/80 grid grid-cols-2 gap-2">
                 <a id="pyqSearchBtn" href="#" target="_blank" rel="noopener noreferrer"
                    class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold py-2.5 px-3 rounded-xl flex items-center justify-center gap-1.5 shadow transition">
@@ -179,7 +202,6 @@
                 </a>
             </div>
 
-            <!-- Modal Status Filter -->
             <div class="px-5 pt-3 pb-2 flex gap-2 overflow-x-auto">
                 <button onclick="filterModalLogs('ALL', this)" class="modal-pill text-xs font-medium px-3 py-1 rounded-full bg-slate-100 text-slate-900">All Dates</button>
                 <button onclick="filterModalLogs('PRESENT', this)" class="modal-pill text-xs font-medium px-3 py-1 rounded-full bg-slate-800 text-emerald-400">Present</button>
@@ -187,7 +209,6 @@
                 <button onclick="filterModalLogs('LEAVE', this)" class="modal-pill text-xs font-medium px-3 py-1 rounded-full bg-slate-800 text-sky-400">Leave</button>
             </div>
 
-            <!-- Scrollable Date List -->
             <div id="modalLogsList" class="p-5 pt-2 overflow-y-auto space-y-2 flex-1"></div>
         </div>
     </div>
@@ -200,9 +221,14 @@
         let activeFilter = "ALL";
         let selectedSubjectIndex = null;
         let modalLogFilter = "ALL";
+        let selectedDay = "Monday";
 
         window.onload = () => {
-            const cached = localStorage.getItem("dcrust_att_cache_v3");
+            const weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+            const today = weekdays[new Date().getDay()];
+            selectedDay = (today === "Sunday") ? "Monday" : today;
+
+            const cached = localStorage.getItem("dcrust_att_cache_v5");
             if (cached) {
                 appData = JSON.parse(cached);
                 renderDashboard();
@@ -210,6 +236,81 @@
                 loadLoginSession();
             }
         };
+
+        function switchMainTab(tab) {
+            const isSub = tab === 'SUBJECTS';
+            document.getElementById('subjectsSection').classList.toggle('hidden', !isSub);
+            document.getElementById('timetableSection').classList.toggle('hidden', isSub);
+
+            document.getElementById('tabSubjects').className = isSub
+                ? "py-2.5 text-xs font-bold rounded-xl bg-indigo-600 text-white shadow transition"
+                : "py-2.5 text-xs font-bold rounded-xl text-slate-400 hover:text-white transition";
+            document.getElementById('tabTimetable').className = !isSub
+                ? "py-2.5 text-xs font-bold rounded-xl bg-indigo-600 text-white shadow transition"
+                : "py-2.5 text-xs font-bold rounded-xl text-slate-400 hover:text-white transition";
+
+            if (!isSub) {
+                highlightSelectedDayBtn();
+                renderTimetable();
+            }
+        }
+
+        function highlightSelectedDayBtn() {
+            document.querySelectorAll('.tt-day-btn').forEach(btn => {
+                const isMatch = btn.getAttribute('onclick').includes(`'${selectedDay}'`);
+                btn.className = isMatch
+                    ? "tt-day-btn text-xs font-bold px-3.5 py-2 rounded-xl bg-indigo-600 text-white shadow"
+                    : "tt-day-btn text-xs font-semibold px-3.5 py-2 rounded-xl bg-slate-800 text-slate-300";
+            });
+        }
+
+        function selectTimetableDay(day, el) {
+            selectedDay = day;
+            highlightSelectedDayBtn();
+            renderTimetable();
+        }
+
+        function renderTimetable() {
+            const list = document.getElementById('timetableList');
+            const tt = appData?.timetable || {};
+            const classes = tt[selectedDay] || [];
+
+            if (!classes.length) {
+                list.innerHTML = `
+                    <div class="glass p-6 rounded-2xl border border-slate-800 text-center space-y-2">
+                        <p class="text-sm font-semibold text-slate-200">No classes found for ${selectedDay}</p>
+                        <p class="text-xs text-slate-400">If your timetable isn't published on e-Samarth yet, this stays empty. Click ↻ Sync if recently updated.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            list.innerHTML = classes.map(slot => {
+                const matchedSub = (appData.subjects || []).find(s =>
+                    (s.code && slot.raw.toUpperCase().includes(s.code.toUpperCase())) ||
+                    (s.name && slot.raw.toLowerCase().includes(s.name.toLowerCase().slice(0, 12)))
+                );
+
+                let statusBadge = "";
+                if (matchedSub) {
+                    const pct = matchedSub.total > 0 ? ((matchedSub.attended / matchedSub.total) * 100).toFixed(1) : 0;
+                    const isSafe = pct >= targetPercent;
+                    statusBadge = isSafe
+                        ? `<span class="text-[10px] font-bold px-2.5 py-1 rounded-md bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">${pct}% • Safe</span>`
+                        : `<span class="text-[10px] font-bold px-2.5 py-1 rounded-md bg-rose-500/15 text-rose-400 border border-rose-500/30">${pct}% • Attend!</span>`;
+                }
+
+                return `
+                    <div class="glass p-4 rounded-2xl border border-slate-800 flex justify-between items-center gap-3">
+                        <div>
+                            <span class="text-[11px] font-semibold text-indigo-400 block">${slot.time}</span>
+                            <p class="text-sm font-bold text-white mt-1 leading-snug">${slot.raw}</p>
+                        </div>
+                        <div class="shrink-0">${statusBadge}</div>
+                    </div>
+                `;
+            }).join('');
+        }
 
         function showLogin() {
             document.getElementById('resultBox').classList.add('hidden');
@@ -221,7 +322,7 @@
         }
 
         function logout() {
-            localStorage.removeItem("dcrust_att_cache_v3");
+            localStorage.removeItem("dcrust_att_cache_v5");
             appData = null;
             simState = {};
             showLogin();
@@ -257,7 +358,7 @@
 
             if (!username || !password) return alert("Enter Roll No and Password");
 
-            btn.innerText = "Syncing subjects & dates...";
+            btn.innerText = "Syncing attendance & timetable...";
             btn.disabled = true;
 
             try {
@@ -272,7 +373,7 @@
                     data.timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                     appData = data;
                     simState = {};
-                    localStorage.setItem("dcrust_att_cache_v3", JSON.stringify(data));
+                    localStorage.setItem("dcrust_att_cache_v5", JSON.stringify(data));
                     renderDashboard();
                 } else {
                     alert(data.message);
@@ -293,6 +394,7 @@
             });
             document.getElementById('t' + val).className = "target-btn text-[11px] font-semibold px-2.5 py-1 rounded-md bg-indigo-600 text-white";
             renderDashboard();
+            renderTimetable();
         }
 
         function filterCards(type, el) {
@@ -318,15 +420,26 @@
             renderDashboard();
         }
 
-        function formatHumanDate(rawDate) {
-            if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
-                const d = new Date(rawDate + "T00:00:00");
-                if (!isNaN(d)) return d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+        // Converts any date format into a timestamp so latest dates sort first
+        function parseSortableDate(rawDate) {
+            if (!rawDate) return 0;
+            const iso = rawDate.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+            if (iso) {
+                return new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3])).getTime();
             }
-            const m = rawDate.match(/^(\d{2})[-/](\d{2})[-/](\d{4})$/);
-            if (m) {
-                const d = new Date(`${m[3]}-${m[2]}-${m[1]}T00:00:00`);
-                if (!isNaN(d)) return d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+            const dmy = rawDate.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+            if (dmy) {
+                return new Date(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1])).getTime();
+            }
+            const parsed = Date.parse(rawDate);
+            return isNaN(parsed) ? 0 : parsed;
+        }
+
+        function formatHumanDate(rawDate) {
+            const ts = parseSortableDate(rawDate);
+            if (ts > 0) {
+                const d = new Date(ts);
+                return d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
             }
             return rawDate;
         }
@@ -383,7 +496,8 @@
         function renderModalLogs() {
             const sub = appData.subjects[selectedSubjectIndex];
             const container = document.getElementById('modalLogsList');
-            const logs = [...(sub.logs || [])];
+            // Sort descending: newest/latest date first, older dates downward
+            const logs = [...(sub.logs || [])].sort((a, b) => parseSortableDate(b.date) - parseSortableDate(a.date));
 
             const filtered = modalLogFilter === "ALL" 
                 ? logs 
