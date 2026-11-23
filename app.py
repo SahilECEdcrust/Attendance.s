@@ -13,6 +13,7 @@ sessions = {}
 BASE_URL = "https://dcrustm.samarth.edu.in"
 LOGIN_URL = f"{BASE_URL}/index.php/site/login"
 ATTENDANCE_URL = f"{BASE_URL}/index.php/student-attendance/attendance/index"
+TIMETABLE_URL = f"{BASE_URL}/index.php/student-attendance/attendance/view-time-table"
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -126,31 +127,18 @@ def fetch_single_subject(session, row_data):
     return None
 
 def fetch_timetable(session, dashboard_soup):
-    """Auto-discovers and parses the e-Samarth weekly timetable."""
+    """Fetches and parses the DCRUST e-Samarth weekly timetable from view-time-table."""
     days_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
     schedule = {d: [] for d in days_order}
 
-    candidate_urls = []
+    candidate_urls = [TIMETABLE_URL]
     for a in dashboard_soup.find_all('a', href=True):
         href = a['href']
         text = a.get_text(" ", strip=True).lower()
-        if any(k in href.lower() or k in text for k in ["timetable", "time table", "routine", "schedule"]):
+        if any(k in href.lower() or k in text for k in ["time-table", "timetable", "time table"]):
             full_url = href if href.startswith("http") else BASE_URL + href
             if full_url not in candidate_urls:
                 candidate_urls.append(full_url)
-
-    fallback_paths = [
-        "/index.php/student/timetable/index",
-        "/index.php/student/timetable/view",
-        "/index.php/student-timetable/timetable/index",
-        "/index.php/timetable/student/index",
-        "/index.php/academic/timetable/student",
-        "/index.php/course-registration/student-timetable/index"
-    ]
-    for path in fallback_paths:
-        u = BASE_URL + path
-        if u not in candidate_urls:
-            candidate_urls.append(u)
 
     for url in candidate_urls:
         try:
@@ -168,7 +156,7 @@ def fetch_timetable(session, dashboard_soup):
                 headers = [th.get_text(" ", strip=True) for th in rows[0].find_all(['th', 'td'])]
                 found_any = False
 
-                # Case A: Rows = Days, Columns = Time Slots
+                # Case A: Rows = Days (Monday..Saturday), Columns = Time Slots
                 for row in rows[1:]:
                     cols = [c.get_text(" | ", strip=True) for c in row.find_all(['td', 'th'])]
                     if not cols:
@@ -183,7 +171,7 @@ def fetch_timetable(session, dashboard_soup):
                                 slot_time = headers[idx] if idx < len(headers) else f"Period {idx}"
                                 schedule[matched_day].append({"time": slot_time, "raw": cell_text})
 
-                # Case B: Columns = Days, Rows = Time Slots
+                # Case B: Columns = Days (Monday..Saturday), Rows = Time Slots
                 if not found_any:
                     day_col_map = {}
                     for idx, h in enumerate(headers):
