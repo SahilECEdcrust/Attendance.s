@@ -233,7 +233,6 @@ def fetch_timetable(session, att_html="", login_html=""):
             slot_title = str(item.get("title") or "").strip()
             desc = str(item.get("desc") or item.get("description") or "").strip()
 
-            # desc format is typically "HMHUM101D : ENGLISH FOR TECHNICAL WRITING"
             if ":" in desc:
                 code_part, sub_part = [p.strip() for p in desc.split(":", 1)]
                 sub_title = f"{sub_part.title()} ({code_part})"
@@ -271,7 +270,7 @@ def fetch_timetable(session, att_html="", login_html=""):
 
 @app.route('/get-attendance', methods=['POST'])
 def get_attendance():
-    data = request.json
+    data = request.json or {}
     session_id = data.get('session_id')
     username = data.get('username')
     password = data.get('password')
@@ -318,7 +317,7 @@ def get_attendance():
                         detail_url = href if href.startswith("http") else BASE_URL + href
                         tasks.append({"code": code, "name": clean_name, "tag": tag, "url": detail_url})
 
-        with ThreadPoolExecutor(max_workers=10) as executor:
+        with ThreadPoolExecutor(max_workers=6) as executor:
             results = list(executor.map(lambda t: fetch_single_subject(session, t), tasks))
 
         subjects = [r for r in results if r is not None]

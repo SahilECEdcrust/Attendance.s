@@ -9,14 +9,17 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #090d16; }
-        .glass { background: rgba(17, 24, 39, 0.78); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.08); }
+        .glass { background: rgba(15, 23, 42, 0.88); backdrop-filter: blur(14px); border: 1px solid rgba(148, 163, 184, 0.14); }
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.5); }
+        ::-webkit-scrollbar-thumb { background: rgba(99, 102, 241, 0.45); border-radius: 9999px; }
     </style>
 </head>
 <body class="text-slate-100 min-h-screen flex flex-col justify-between selection:bg-indigo-500 selection:text-white">
 
     <div>
         <!-- Top Navbar -->
-        <nav class="sticky top-0 z-30 glass border-b border-slate-800/80 px-4 py-3">
+        <nav class="sticky top-0 z-30 glass border-b border-slate-800 px-4 py-3">
             <div class="max-w-lg mx-auto flex justify-between items-center">
                 <div class="flex items-center gap-2.5">
                     <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center font-extrabold text-white shadow-lg shadow-indigo-500/30">D</div>
@@ -26,8 +29,9 @@
                     </div>
                 </div>
                 <div id="navActions" class="hidden flex items-center gap-2">
-                    <button onclick="showLogin()" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg border border-slate-700 transition">↻ Sync</button>
-                    <button onclick="logout()" class="text-xs bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 px-3 py-1.5 rounded-lg border border-rose-500/20 transition">Logout</button>
+                    <button onclick="copySummary()" id="copyBtn" class="text-xs bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 px-3 py-1.5 rounded-lg border border-indigo-500/30 transition">📋 Copy</button>
+                    <button onclick="showLogin()" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg border border-slate-700 transition">↻ Sync</button>
+                    <button onclick="logout()" class="text-xs bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 px-3 py-1.5 rounded-lg border border-rose-500/30 transition">Logout</button>
                 </div>
             </div>
         </nav>
@@ -38,30 +42,30 @@
             <div id="loginBox" class="glass p-6 rounded-3xl shadow-2xl">
                 <div class="mb-6">
                     <h1 class="text-2xl font-extrabold text-white">Check e-Samarth Attendance</h1>
-                    <p class="text-slate-400 text-xs mt-1">Real-time attendance, timetable, date-wise history & PYQs.</p>
+                    <p class="text-slate-300 text-xs mt-1">Real-time attendance, bunk simulator, timetable & PYQs.</p>
                 </div>
 
                 <div class="space-y-4">
                     <div>
-                        <label class="block text-xs font-medium text-slate-400 mb-1.5">Roll Number / Samarth ID</label>
-                        <input type="text" id="username" autocomplete="off" placeholder="e.g. 2600100XXXX" 
-                            class="w-full px-4 py-3 rounded-xl bg-slate-900/90 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500 transition">
+                        <label class="block text-xs font-medium text-slate-300 mb-1.5">Roll Number / Samarth ID</label>
+                        <input type="text" id="username" autocomplete="off" placeholder="e.g. 2600100XXXX"
+                            class="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-sm text-white focus:outline-none focus:border-indigo-500 transition">
                     </div>
                     <div>
-                        <label class="block text-xs font-medium text-slate-400 mb-1.5">Password</label>
-                        <input type="password" id="password" autocomplete="off" placeholder="••••••••" 
-                            class="w-full px-4 py-3 rounded-xl bg-slate-900/90 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500 transition">
+                        <label class="block text-xs font-medium text-slate-300 mb-1.5">Password</label>
+                        <input type="password" id="password" autocomplete="off" placeholder="••••••••"
+                            class="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-sm text-white focus:outline-none focus:border-indigo-500 transition">
                     </div>
 
                     <!-- CAPTCHA -->
-                    <div id="captchaContainer" class="hidden bg-slate-900/60 p-3 rounded-xl border border-slate-800">
-                        <label class="block text-xs font-medium text-slate-400 mb-2">Security Captcha</label>
+                    <div id="captchaContainer" class="hidden bg-slate-900/90 p-3 rounded-xl border border-slate-800">
+                        <label class="block text-xs font-medium text-slate-300 mb-2">Security Captcha</label>
                         <div class="flex items-center gap-3 mb-2.5">
                             <img id="captchaImg" src="" alt="Captcha" class="h-11 rounded-lg bg-white px-2 py-1">
-                            <button type="button" onclick="loadLoginSession()" class="text-xs bg-slate-800 hover:bg-slate-700 px-3 py-2.5 rounded-lg border border-slate-700 transition">↻ Reload</button>
+                            <button type="button" onclick="loadLoginSession()" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-2.5 rounded-lg border border-slate-700 transition">↻ Reload</button>
                         </div>
-                        <input type="text" id="captchaInput" autocomplete="off" placeholder="Enter characters above" 
-                            class="w-full px-4 py-2.5 rounded-lg bg-slate-950 border border-slate-700 text-sm focus:outline-none focus:border-indigo-500">
+                        <input type="text" id="captchaInput" autocomplete="off" placeholder="Enter characters above"
+                            class="w-full px-4 py-2.5 rounded-lg bg-slate-950 border border-slate-700 text-sm text-white focus:outline-none focus:border-indigo-500">
                     </div>
 
                     <button onclick="fetchAttendance()" id="submitBtn"
@@ -71,33 +75,37 @@
                 </div>
 
                 <p id="statusText" class="text-xs text-amber-400 text-center mt-3"></p>
-                <div class="mt-5 pt-4 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500">
+                <div class="mt-5 pt-4 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
                     <span>🔒 Zero credential storage</span>
-                    <span>📅 Timetable + PYQs</span>
+                    <span>📅 Bunk Sim + Timetable + PYQs</span>
                 </div>
             </div>
 
             <!-- DASHBOARD SCREEN -->
             <div id="resultBox" class="hidden space-y-5">
-                
+
                 <!-- Hero Overall Card -->
                 <div class="glass p-5 rounded-3xl relative overflow-hidden">
-                    <div class="flex justify-between items-center">
+                    <div class="flex justify-between items-center gap-3">
                         <div>
-                            <span id="lastUpdated" class="text-[11px] text-slate-400 bg-slate-800/80 px-2.5 py-1 rounded-full"></span>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span id="lastUpdated" class="text-[11px] text-slate-300 bg-slate-800 px-2.5 py-1 rounded-full"></span>
+                                <span id="simBanner" class="hidden text-[11px] font-semibold text-amber-300 bg-amber-500/15 border border-amber-500/30 px-2.5 py-1 rounded-full">Simulating</span>
+                            </div>
                             <h2 id="studentRoll" class="text-xl font-bold text-white mt-2"></h2>
-                            <p id="overallFraction" class="text-xs text-slate-400 mt-0.5"></p>
-                            
-                            <div class="flex items-center gap-1.5 mt-3">
+                            <p id="overallFraction" class="text-xs text-slate-300 mt-0.5"></p>
+
+                            <div class="flex flex-wrap items-center gap-1.5 mt-3">
                                 <span class="text-[11px] text-slate-400">Goal:</span>
                                 <button onclick="setTarget(75)" id="t75" class="target-btn text-[11px] font-semibold px-2.5 py-1 rounded-md bg-indigo-600 text-white">75%</button>
-                                <button onclick="setTarget(80)" id="t80" class="target-btn text-[11px] font-semibold px-2.5 py-1 rounded-md bg-slate-800 text-slate-400">80%</button>
-                                <button onclick="setTarget(85)" id="t85" class="target-btn text-[11px] font-semibold px-2.5 py-1 rounded-md bg-slate-800 text-slate-400">85%</button>
+                                <button onclick="setTarget(80)" id="t80" class="target-btn text-[11px] font-semibold px-2.5 py-1 rounded-md bg-slate-800 text-slate-300">80%</button>
+                                <button onclick="setTarget(85)" id="t85" class="target-btn text-[11px] font-semibold px-2.5 py-1 rounded-md bg-slate-800 text-slate-300">85%</button>
+                                <button onclick="resetAllSim()" id="resetAllBtn" class="hidden text-[11px] font-semibold px-2.5 py-1 rounded-md bg-rose-500/15 text-rose-300 border border-rose-500/30">Reset Sim</button>
                             </div>
                         </div>
 
                         <!-- Circular Ring -->
-                        <div class="relative w-24 h-24 flex items-center justify-center">
+                        <div class="relative w-24 h-24 shrink-0 flex items-center justify-center">
                             <svg class="w-24 h-24 -rotate-90" viewBox="0 0 36 36">
                                 <path class="text-slate-800" stroke-width="3.2" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
                                 <path id="overallRing" class="text-emerald-400 transition-all duration-700" stroke-dasharray="0, 100" stroke-width="3.2" stroke-linecap="round" stroke-currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
@@ -110,12 +118,12 @@
                 </div>
 
                 <!-- MAIN VIEW SWITCHER: SUBJECTS vs TIMETABLE -->
-                <div class="grid grid-cols-2 gap-2 bg-slate-900/90 p-1.5 rounded-2xl border border-slate-800">
+                <div class="grid grid-cols-2 gap-2 bg-slate-900 p-1.5 rounded-2xl border border-slate-800">
                     <button onclick="switchMainTab('SUBJECTS')" id="tabSubjects" class="py-2.5 text-xs font-bold rounded-xl bg-indigo-600 text-white shadow transition">
                         📚 Subjects & PYQs
                     </button>
-                    <button onclick="switchMainTab('TIMETABLE')" id="tabTimetable" class="py-2.5 text-xs font-bold rounded-xl text-slate-400 hover:text-white transition">
-                        🗓️ Timetable
+                    <button onclick="switchMainTab('TIMETABLE')" id="tabTimetable" class="py-2.5 text-xs font-bold rounded-xl text-slate-300 hover:text-white transition">
+                        🗓️ Timetable & Bunk
                     </button>
                 </div>
 
@@ -123,12 +131,12 @@
                 <div id="subjectsSection" class="space-y-4">
                     <div class="flex gap-2 overflow-x-auto pb-1">
                         <button onclick="filterCards('ALL', this)" class="filter-pill text-xs font-medium px-3.5 py-1.5 rounded-full bg-slate-100 text-slate-900">All Subjects</button>
-                        <button onclick="filterCards('LOW', this)" class="filter-pill text-xs font-medium px-3.5 py-1.5 rounded-full bg-slate-800 text-slate-300">⚠️ Below Goal</button>
-                        <button onclick="filterCards('Theory', this)" class="filter-pill text-xs font-medium px-3.5 py-1.5 rounded-full bg-slate-800 text-slate-300">Theory</button>
-                        <button onclick="filterCards('Lab', this)" class="filter-pill text-xs font-medium px-3.5 py-1.5 rounded-full bg-slate-800 text-slate-300">Labs</button>
+                        <button onclick="filterCards('LOW', this)" class="filter-pill text-xs font-medium px-3.5 py-1.5 rounded-full bg-slate-800 text-slate-200">⚠️ Below Goal</button>
+                        <button onclick="filterCards('Theory', this)" class="filter-pill text-xs font-medium px-3.5 py-1.5 rounded-full bg-slate-800 text-slate-200">Theory</button>
+                        <button onclick="filterCards('Lab', this)" class="filter-pill text-xs font-medium px-3.5 py-1.5 rounded-full bg-slate-800 text-slate-200">Labs</button>
                     </div>
 
-                    <p class="text-[11px] text-slate-400 flex items-center gap-1.5 px-1">
+                    <p class="text-[11px] text-slate-300 flex items-center gap-1.5 px-1">
                         <span>💡</span> Tap any subject card to view latest-first dates & PYQs.
                     </p>
 
@@ -138,12 +146,12 @@
                 <!-- VIEW 2: TIMETABLE SECTION -->
                 <div id="timetableSection" class="hidden space-y-4">
                     <div class="flex gap-1.5 overflow-x-auto pb-1" id="daySelectorBar">
-                        <button onclick="selectTimetableDay('Monday', this)" class="tt-day-btn text-xs font-semibold px-3.5 py-2 rounded-xl bg-slate-800 text-slate-300">Mon</button>
-                        <button onclick="selectTimetableDay('Tuesday', this)" class="tt-day-btn text-xs font-semibold px-3.5 py-2 rounded-xl bg-slate-800 text-slate-300">Tue</button>
-                        <button onclick="selectTimetableDay('Wednesday', this)" class="tt-day-btn text-xs font-semibold px-3.5 py-2 rounded-xl bg-slate-800 text-slate-300">Wed</button>
-                        <button onclick="selectTimetableDay('Thursday', this)" class="tt-day-btn text-xs font-semibold px-3.5 py-2 rounded-xl bg-slate-800 text-slate-300">Thu</button>
-                        <button onclick="selectTimetableDay('Friday', this)" class="tt-day-btn text-xs font-semibold px-3.5 py-2 rounded-xl bg-slate-800 text-slate-300">Fri</button>
-                        <button onclick="selectTimetableDay('Saturday', this)" class="tt-day-btn text-xs font-semibold px-3.5 py-2 rounded-xl bg-slate-800 text-slate-300">Sat</button>
+                        <button onclick="selectTimetableDay('Monday', this)" class="tt-day-btn text-xs font-semibold px-3.5 py-2 rounded-xl bg-slate-800 text-slate-200">Mon</button>
+                        <button onclick="selectTimetableDay('Tuesday', this)" class="tt-day-btn text-xs font-semibold px-3.5 py-2 rounded-xl bg-slate-800 text-slate-200">Tue</button>
+                        <button onclick="selectTimetableDay('Wednesday', this)" class="tt-day-btn text-xs font-semibold px-3.5 py-2 rounded-xl bg-slate-800 text-slate-200">Wed</button>
+                        <button onclick="selectTimetableDay('Thursday', this)" class="tt-day-btn text-xs font-semibold px-3.5 py-2 rounded-xl bg-slate-800 text-slate-200">Thu</button>
+                        <button onclick="selectTimetableDay('Friday', this)" class="tt-day-btn text-xs font-semibold px-3.5 py-2 rounded-xl bg-slate-800 text-slate-200">Fri</button>
+                        <button onclick="selectTimetableDay('Saturday', this)" class="tt-day-btn text-xs font-semibold px-3.5 py-2 rounded-xl bg-slate-800 text-slate-200">Sat</button>
                     </div>
 
                     <div id="timetableList" class="space-y-3"></div>
@@ -154,15 +162,15 @@
 
         <!-- ADSTERRA NATIVE BANNER & SMARTLINK -->
         <div class="max-w-lg mx-auto px-4 mt-6 space-y-3">
-            <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-3 text-center">
-                <span class="block text-[9px] uppercase tracking-widest text-slate-600 mb-2">Sponsored</span>
+            <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3 text-center">
+                <span class="block text-[9px] uppercase tracking-widest text-slate-400 mb-2">Sponsored</span>
                 <script async fetchpriority="high" data-cfasync="false" src="https://bicea.org/21/b045045ab13803e0dfc65034c9fc2ee0"></script>
                 <div id="container-b045045ab13803e0dfc65034c9fc2ee0"></div>
             </div>
 
             <div class="text-center">
                 <a href="https://arwf.org/4/2ca98437b546f061562edbb1dd27bd6e" target="_blank" rel="noopener noreferrer sponsored"
-                   class="inline-flex items-center justify-center w-full py-2.5 px-4 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 text-xs font-semibold text-indigo-300 transition">
+                   class="inline-flex items-center justify-center w-full py-2.5 px-4 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/35 text-xs font-semibold text-indigo-300 transition">
                     Download Additional Study Resources &amp; PYQs ↗
                 </a>
             </div>
@@ -171,7 +179,7 @@
 
     <!-- Creator Credit Footer -->
     <footer class="max-w-lg mx-auto px-4 mt-8 mb-6 text-center">
-        <div class="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-slate-900/80 border border-slate-800/80 text-xs text-slate-400 shadow-lg">
+        <div class="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-slate-900 border border-slate-800 text-xs text-slate-300 shadow-lg">
             <span>Created with ❤️ by</span>
             <span class="font-bold text-indigo-400 tracking-wide">Sahil</span>
         </div>
@@ -180,7 +188,7 @@
     <!-- SUBJECT DETAIL MODAL -->
     <div id="subjectModal" class="fixed inset-0 z-50 hidden bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onclick="closeModalOnBackdrop(event)">
         <div class="bg-[#0f1623] border border-slate-800 w-full max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[88vh] flex flex-col shadow-2xl overflow-hidden">
-            
+
             <div class="p-5 border-b border-slate-800 flex justify-between items-start gap-3">
                 <div>
                     <div class="flex items-center gap-2">
@@ -189,31 +197,31 @@
                     </div>
                     <h3 id="modalTitle" class="text-base font-bold text-white mt-1.5 leading-snug"></h3>
                 </div>
-                <button onclick="closeSubjectModal()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center text-sm">✕</button>
+                <button onclick="closeSubjectModal()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center text-sm">✕</button>
             </div>
 
-            <div class="grid grid-cols-3 gap-2 px-5 py-3 bg-slate-900/60 border-b border-slate-800/80 text-center">
-                <div class="bg-emerald-500/10 border border-emerald-500/20 rounded-xl py-2">
+            <div class="grid grid-cols-3 gap-2 px-5 py-3 bg-slate-900/80 border-b border-slate-800 text-center">
+                <div class="bg-emerald-500/10 border border-emerald-500/25 rounded-xl py-2">
                     <p id="modalPresentCount" class="text-base font-extrabold text-emerald-400">0</p>
-                    <p class="text-[10px] text-slate-400 uppercase font-semibold">Present</p>
+                    <p class="text-[10px] text-slate-300 uppercase font-semibold">Present</p>
                 </div>
-                <div class="bg-rose-500/10 border border-rose-500/20 rounded-xl py-2">
+                <div class="bg-rose-500/10 border border-rose-500/25 rounded-xl py-2">
                     <p id="modalAbsentCount" class="text-base font-extrabold text-rose-400">0</p>
-                    <p class="text-[10px] text-slate-400 uppercase font-semibold">Absent</p>
+                    <p class="text-[10px] text-slate-300 uppercase font-semibold">Absent</p>
                 </div>
-                <div class="bg-sky-500/10 border border-sky-500/20 rounded-xl py-2">
+                <div class="bg-sky-500/10 border border-sky-500/25 rounded-xl py-2">
                     <p id="modalLeaveCount" class="text-base font-extrabold text-sky-400">0</p>
-                    <p class="text-[10px] text-slate-400 uppercase font-semibold">Leave</p>
+                    <p class="text-[10px] text-slate-300 uppercase font-semibold">Leave</p>
                 </div>
             </div>
 
-            <div class="px-5 py-3 bg-indigo-950/30 border-b border-slate-800/80 grid grid-cols-2 gap-2">
+            <div class="px-5 py-3 bg-indigo-950/35 border-b border-slate-800 grid grid-cols-2 gap-2">
                 <a id="pyqSearchBtn" href="#" target="_blank" rel="noopener noreferrer"
                    class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold py-2.5 px-3 rounded-xl flex items-center justify-center gap-1.5 shadow transition">
                     <span>🔍</span> Search PYQs
                 </a>
                 <a href="https://www.dcrustedp.in/dcrustpqp" target="_blank" rel="noopener noreferrer"
-                   class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold py-2.5 px-3 rounded-xl flex items-center justify-center gap-1.5 transition">
+                   class="bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-700 text-xs font-semibold py-2.5 px-3 rounded-xl flex items-center justify-center gap-1.5 transition">
                     <span>🏛️</span> DCRUST PYQ Portal
                 </a>
             </div>
@@ -232,7 +240,7 @@
     <script>
         let currentSessionId = "";
         let appData = null;
-        let simState = {};
+        let simState = {}; // { [subjectIndex]: { att: number, tot: number } }
         let targetPercent = 75;
         let activeFilter = "ALL";
         let selectedSubjectIndex = null;
@@ -244,14 +252,126 @@
             const today = weekdays[new Date().getDay()];
             selectedDay = (today === "Sunday") ? "Monday" : today;
 
+            ['username', 'password', 'captchaInput'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            fetchAttendance();
+                        }
+                    });
+                }
+            });
+
             const cached = localStorage.getItem("dcrust_att_cache_v6");
             if (cached) {
-                appData = JSON.parse(cached);
-                renderDashboard();
+                try {
+                    appData = JSON.parse(cached);
+                    renderDashboard();
+                } catch {
+                    localStorage.removeItem("dcrust_att_cache_v6");
+                    loadLoginSession();
+                }
             } else {
                 loadLoginSession();
             }
         };
+
+        function findMatchedSubjectIndex(slotRaw) {
+            const subs = appData?.subjects || [];
+            const upperSlot = (slotRaw || "").toUpperCase();
+            const lowerSlot = (slotRaw || "").toLowerCase();
+
+            let idx = subs.findIndex(s => s.code && upperSlot.includes(s.code.toUpperCase()));
+            if (idx !== -1) return idx;
+
+            idx = subs.findIndex(s => s.name && lowerSlot.includes(s.name.toLowerCase().slice(0, 14)));
+            return idx;
+        }
+
+        function getSimulatedSubjectStats(idx) {
+            const sub = appData?.subjects?.[idx];
+            if (!sub) return null;
+            const sim = simState[idx] || { att: 0, tot: 0 };
+            const att = Math.max(0, (sub.attended || 0) + sim.att);
+            const tot = Math.max(1, (sub.total || 0) + sim.tot);
+            const pct = Number(((att / tot) * 100).toFixed(1));
+            const isSimmed = (sim.att !== 0 || sim.tot !== 0);
+            return { sub, att, tot, pct, sim, isSimmed };
+        }
+
+        function toggleSlotBunk(slotRaw) {
+            const idx = findMatchedSubjectIndex(slotRaw);
+            if (idx === -1) {
+                alert("Could not match this class to a subject in your attendance list.");
+                return;
+            }
+            if (!simState[idx]) simState[idx] = { att: 0, tot: 0 };
+            const current = simState[idx];
+            // Toggle: if this class is already simulated as a bunk (+0 att, +1 tot), undo it; otherwise add +1 tot (bunk)
+            if (current.att === 0 && current.tot > 0) {
+                current.tot -= 1;
+                if (current.tot === 0) delete simState[idx];
+            } else {
+                current.tot += 1;
+            }
+            renderDashboard();
+        }
+
+        function simulateFullDayBunk(day) {
+            const classes = getDayClasses(day);
+            if (!classes.length) return;
+
+            let matchedAny = false;
+            classes.forEach(slot => {
+                const idx = findMatchedSubjectIndex(slot.raw);
+                if (idx !== -1) {
+                    matchedAny = true;
+                    if (!simState[idx]) simState[idx] = { att: 0, tot: 0 };
+                    simState[idx].tot += 1;
+                }
+            });
+
+            if (!matchedAny) {
+                alert(`No classes on ${day} matched your attendance subjects.`);
+                return;
+            }
+            renderDashboard();
+        }
+
+        function resetAllSim() {
+            simState = {};
+            renderDashboard();
+        }
+
+        function copySummary() {
+            if (!appData) return;
+            let grandAtt = 0, grandTot = 0;
+            const lines = [];
+            (appData.subjects || []).forEach((_, idx) => {
+                const st = getSimulatedSubjectStats(idx);
+                if (!st) return;
+                grandAtt += st.att;
+                grandTot += st.tot;
+                lines.push(`• ${st.sub.name} (${st.sub.tag}): ${st.pct}% (${st.att}/${st.tot})`);
+            });
+            const overallPct = grandTot > 0 ? ((grandAtt / grandTot) * 100).toFixed(1) : "0.0";
+            const summary = [
+                `📊 DCRUST Attendance (${appData.roll_no})`,
+                `Overall: ${overallPct}% (${grandAtt}/${grandTot}) • Goal: ${targetPercent}%`,
+                ...lines
+            ].join("\n");
+
+            navigator.clipboard?.writeText(summary).then(() => {
+                const btn = document.getElementById('copyBtn');
+                const orig = btn.innerText;
+                btn.innerText = "✓ Copied";
+                setTimeout(() => { btn.innerText = orig; }, 1600);
+            }).catch(() => {
+                alert(summary);
+            });
+        }
 
         function switchMainTab(tab) {
             const isSub = tab === 'SUBJECTS';
@@ -260,10 +380,10 @@
 
             document.getElementById('tabSubjects').className = isSub
                 ? "py-2.5 text-xs font-bold rounded-xl bg-indigo-600 text-white shadow transition"
-                : "py-2.5 text-xs font-bold rounded-xl text-slate-400 hover:text-white transition";
+                : "py-2.5 text-xs font-bold rounded-xl text-slate-300 hover:text-white transition";
             document.getElementById('tabTimetable').className = !isSub
                 ? "py-2.5 text-xs font-bold rounded-xl bg-indigo-600 text-white shadow transition"
-                : "py-2.5 text-xs font-bold rounded-xl text-slate-400 hover:text-white transition";
+                : "py-2.5 text-xs font-bold rounded-xl text-slate-300 hover:text-white transition";
 
             if (!isSub) {
                 highlightSelectedDayBtn();
@@ -276,11 +396,11 @@
                 const isMatch = btn.getAttribute('onclick').includes(`'${selectedDay}'`);
                 btn.className = isMatch
                     ? "tt-day-btn text-xs font-bold px-3.5 py-2 rounded-xl bg-indigo-600 text-white shadow"
-                    : "tt-day-btn text-xs font-semibold px-3.5 py-2 rounded-xl bg-slate-800 text-slate-300";
+                    : "tt-day-btn text-xs font-semibold px-3.5 py-2 rounded-xl bg-slate-800 text-slate-200";
             });
         }
 
-        function selectTimetableDay(day, el) {
+        function selectTimetableDay(day) {
             selectedDay = day;
             highlightSelectedDayBtn();
             renderTimetable();
@@ -292,6 +412,12 @@
             } catch {
                 return {};
             }
+        }
+
+        function getDayClasses(day) {
+            const portalClasses = appData?.timetable?.[day] || [];
+            const customClasses = getCustomTimetable()[day] || [];
+            return [...portalClasses, ...customClasses];
         }
 
         function addCustomClass() {
@@ -328,40 +454,59 @@
 
         function renderTimetable() {
             const list = document.getElementById('timetableList');
-            const portalClasses = appData?.timetable?.[selectedDay] || [];
-            const customClasses = getCustomTimetable()[selectedDay] || [];
-            const classes = [...portalClasses, ...customClasses];
+            const classes = getDayClasses(selectedDay);
 
-            const addBtnHtml = `
-                <button onclick="addCustomClass()" class="w-full py-2.5 rounded-xl border border-dashed border-slate-700 hover:border-indigo-500 text-xs font-semibold text-indigo-400 transition">
-                    + Add Class to ${selectedDay}
-                </button>
+            const dayActionsHtml = `
+                <div class="grid grid-cols-2 gap-2 pt-1">
+                    <button onclick="addCustomClass()" class="py-2.5 px-3 rounded-xl border border-dashed border-slate-700 hover:border-indigo-500 text-xs font-semibold text-indigo-300 transition">
+                        + Add Class
+                    </button>
+                    <button onclick="simulateFullDayBunk('${selectedDay}')" class="py-2.5 px-3 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/35 text-xs font-semibold text-amber-300 transition">
+                        ⚡ Bunk Full ${selectedDay.slice(0, 3)}
+                    </button>
+                </div>
             `;
 
             if (!classes.length) {
                 list.innerHTML = `
                     <div class="glass p-6 rounded-2xl border border-slate-800 text-center space-y-2 mb-3">
-                        <p class="text-sm font-semibold text-slate-200">No e-Samarth timetable found for ${selectedDay}</p>
-                        <p class="text-xs text-slate-400">Add your classes below to track live attendance right on your schedule.</p>
+                        <p class="text-sm font-semibold text-slate-100">No e-Samarth timetable found for ${selectedDay}</p>
+                        <p class="text-xs text-slate-400">Add your classes below to simulate bunks right on your schedule.</p>
                     </div>
-                    ${addBtnHtml}
+                    ${dayActionsHtml}
                 `;
                 return;
             }
 
             list.innerHTML = classes.map((slot, idx) => {
-                const matchedSub = (appData.subjects || []).find(s =>
-                    (s.code && slot.raw.toUpperCase().includes(s.code.toUpperCase())) ||
-                    (s.name && slot.raw.toLowerCase().includes(s.name.toLowerCase().slice(0, 12)))
-                );
-
+                const matchedIdx = findMatchedSubjectIndex(slot.raw);
                 let statusBadge = "";
-                if (matchedSub) {
-                    const pct = matchedSub.total > 0 ? ((matchedSub.attended / matchedSub.total) * 100).toFixed(1) : 0;
-                    const isSafe = pct >= targetPercent;
+                let warningNote = "";
+                let bunkBtn = "";
+
+                if (matchedIdx !== -1) {
+                    const st = getSimulatedSubjectStats(matchedIdx);
+                    const isSafe = st.pct >= targetPercent;
                     statusBadge = isSafe
-                        ? `<span class="text-[10px] font-bold px-2.5 py-1 rounded-md bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">${pct}% • Safe</span>`
-                        : `<span class="text-[10px] font-bold px-2.5 py-1 rounded-md bg-rose-500/15 text-rose-400 border border-rose-500/30">${pct}% • Attend!</span>`;
+                        ? `<span class="text-[10px] font-bold px-2.5 py-1 rounded-md bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">${st.pct}% • Safe</span>`
+                        : `<span class="text-[10px] font-bold px-2.5 py-1 rounded-md bg-rose-500/15 text-rose-400 border border-rose-500/30">${st.pct}% • Below ${targetPercent}%</span>`;
+
+                    const nextTot = st.tot + 1;
+                    const pctIfBunkNext = Number(((st.att / nextTot) * 100).toFixed(1));
+                    if (st.pct >= targetPercent && pctIfBunkNext < targetPercent) {
+                        warningNote = `<p class="text-[11px] text-amber-300 font-medium mt-1.5">⚠️ Skipping this drops ${st.sub.name} to ${pctIfBunkNext}% (below ${targetPercent}%).</p>`;
+                    }
+
+                    const encodedRaw = encodeURIComponent(slot.raw);
+                    const activeBunk = st.sim.tot > 0 && st.sim.att === 0;
+                    bunkBtn = `
+                        <button onclick="toggleSlotBunk(decodeURIComponent('${encodedRaw}'))"
+                            class="text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border transition ${activeBunk
+                                ? 'bg-amber-500/25 text-amber-200 border-amber-400/50'
+                                : 'bg-slate-800 hover:bg-rose-500/20 text-slate-200 hover:text-rose-300 border-slate-700'}">
+                            ${activeBunk ? '↩ Undo Bunk' : 'Simulate Bunk'}
+                        </button>
+                    `;
                 }
 
                 const delBtn = slot.custom
@@ -369,15 +514,19 @@
                     : "";
 
                 return `
-                    <div class="glass p-4 rounded-2xl border border-slate-800 flex justify-between items-center gap-3">
-                        <div>
-                            <span class="text-[11px] font-semibold text-indigo-400 block">${slot.time} ${delBtn}</span>
-                            <p class="text-sm font-bold text-white mt-1 leading-snug">${slot.raw}</p>
+                    <div class="glass p-4 rounded-2xl border border-slate-800 space-y-2.5">
+                        <div class="flex justify-between items-start gap-3">
+                            <div>
+                                <span class="text-[11px] font-semibold text-indigo-400 block">${slot.time} ${delBtn}</span>
+                                <p class="text-sm font-bold text-white mt-1 leading-snug">${slot.raw}</p>
+                                ${warningNote}
+                            </div>
+                            <div class="shrink-0">${statusBadge}</div>
                         </div>
-                        <div class="shrink-0">${statusBadge}</div>
+                        ${bunkBtn ? `<div class="pt-2 border-t border-slate-800/80 flex justify-end">${bunkBtn}</div>` : ''}
                     </div>
                 `;
-            }).join('') + `<div class="pt-1">${addBtnHtml}</div>`;
+            }).join('') + dayActionsHtml;
         }
 
         function showLogin() {
@@ -458,19 +607,21 @@
         function setTarget(val) {
             targetPercent = val;
             document.querySelectorAll('.target-btn').forEach(b => {
-                b.className = "target-btn text-[11px] font-semibold px-2.5 py-1 rounded-md bg-slate-800 text-slate-400";
+                if (b.id === 'resetAllBtn') return;
+                b.className = "target-btn text-[11px] font-semibold px-2.5 py-1 rounded-md bg-slate-800 text-slate-300";
             });
             document.getElementById('t' + val).className = "target-btn text-[11px] font-semibold px-2.5 py-1 rounded-md bg-indigo-600 text-white";
             renderDashboard();
-            renderTimetable();
         }
 
         function filterCards(type, el) {
             activeFilter = type;
             document.querySelectorAll('.filter-pill').forEach(p => {
-                p.className = "filter-pill text-xs font-medium px-3.5 py-1.5 rounded-full bg-slate-800 text-slate-300";
+                p.className = "filter-pill text-xs font-medium px-3.5 py-1.5 rounded-full bg-slate-800 text-slate-200";
             });
-            el.className = "filter-pill text-xs font-medium px-3.5 py-1.5 rounded-full bg-slate-100 text-slate-900";
+            if (el) {
+                el.className = "filter-pill text-xs font-medium px-3.5 py-1.5 rounded-full bg-slate-100 text-slate-900";
+            }
             renderDashboard();
         }
 
@@ -534,9 +685,9 @@
             document.getElementById('modalLeaveCount').innerText = leaveCnt;
 
             document.querySelectorAll('.modal-pill').forEach((p, i) => {
-                p.className = i === 0 
+                p.className = i === 0
                     ? "modal-pill text-xs font-medium px-3 py-1 rounded-full bg-slate-100 text-slate-900"
-                    : "modal-pill text-xs font-medium px-3 py-1 rounded-full bg-slate-800 text-slate-300";
+                    : "modal-pill text-xs font-medium px-3 py-1 rounded-full bg-slate-800 text-slate-200";
             });
 
             renderModalLogs();
@@ -554,9 +705,11 @@
         function filterModalLogs(status, el) {
             modalLogFilter = status;
             document.querySelectorAll('.modal-pill').forEach(p => {
-                p.className = "modal-pill text-xs font-medium px-3 py-1 rounded-full bg-slate-800 text-slate-300";
+                p.className = "modal-pill text-xs font-medium px-3 py-1 rounded-full bg-slate-800 text-slate-200";
             });
-            el.className = "modal-pill text-xs font-medium px-3 py-1 rounded-full bg-slate-100 text-slate-900";
+            if (el) {
+                el.className = "modal-pill text-xs font-medium px-3 py-1 rounded-full bg-slate-100 text-slate-900";
+            }
             renderModalLogs();
         }
 
@@ -565,8 +718,8 @@
             const container = document.getElementById('modalLogsList');
             const logs = [...(sub.logs || [])].sort((a, b) => parseSortableDate(b.date) - parseSortableDate(a.date));
 
-            const filtered = modalLogFilter === "ALL" 
-                ? logs 
+            const filtered = modalLogFilter === "ALL"
+                ? logs
                 : logs.filter(l => l.status === modalLogFilter);
 
             if (!filtered.length) {
@@ -586,12 +739,12 @@
                 }
 
                 return `
-                    <div class="flex justify-between items-center bg-slate-900/80 border border-slate-800/90 px-3.5 py-2.5 rounded-xl">
+                    <div class="flex justify-between items-center bg-slate-900/90 border border-slate-800 px-3.5 py-2.5 rounded-xl">
                         <div class="flex items-center gap-2.5">
                             <span class="w-2 h-2 rounded-full ${dot}"></span>
                             <div>
                                 <p class="text-xs font-semibold text-slate-100">${formatHumanDate(item.date)}</p>
-                                <p class="text-[11px] text-slate-500">${item.time}</p>
+                                <p class="text-[11px] text-slate-400">${item.time}</p>
                             </div>
                         </div>
                         <span class="text-[10px] font-bold px-2.5 py-1 rounded-md border ${badge}">${item.status}</span>
@@ -606,6 +759,10 @@
             document.getElementById('resultBox').classList.remove('hidden');
             document.getElementById('navActions').classList.remove('hidden');
 
+            const anySimActive = Object.keys(simState).length > 0;
+            document.getElementById('simBanner').classList.toggle('hidden', !anySimActive);
+            document.getElementById('resetAllBtn').classList.toggle('hidden', !anySimActive);
+
             document.getElementById('studentRoll').innerText = `Roll: ${appData.roll_no}`;
             document.getElementById('lastUpdated').innerText = `Synced at ${appData.timestamp || 'Just now'}`;
 
@@ -614,14 +771,14 @@
             list.innerHTML = "";
             const goalRatio = targetPercent / 100;
 
-            appData.subjects.forEach((sub, idx) => {
-                const sim = simState[idx] || { att: 0, tot: 0 };
-                const att = sub.attended + sim.att;
-                const tot = sub.total + sim.tot;
+            (appData.subjects || []).forEach((sub, idx) => {
+                const st = getSimulatedSubjectStats(idx);
+                const att = st.att;
+                const tot = st.tot;
+                const pct = st.pct;
                 grandAtt += att;
                 grandTot += tot;
 
-                const pct = tot > 0 ? ((att / tot) * 100) : 0;
                 const pctDisplay = pct.toFixed(1);
                 const isSafe = pct >= targetPercent;
 
@@ -632,60 +789,63 @@
                 let insight = "";
                 if (isSafe) {
                     const canBunk = Math.floor((att / goalRatio) - tot);
-                    insight = canBunk > 0 
-                        ? `Safe to skip <b class="text-emerald-400">${canBunk}</b> more` 
-                        : `<span class="text-amber-400">On the edge!</span>`;
+                    insight = canBunk > 0
+                        ? `Safe to skip <b class="text-emerald-400">${canBunk}</b> more`
+                        : `<span class="text-amber-300">On the edge!</span>`;
                 } else {
-                    const need = Math.ceil((goalRatio * tot - att) / (1 - goalRatio));
+                    const need = Math.max(0, Math.ceil((goalRatio * tot - att) / (1 - goalRatio)));
                     insight = `Attend next <b class="text-rose-400">${need}</b> in a row`;
                 }
 
-                const simBadge = (sim.att > 0 || sim.tot > 0) 
-                    ? `<button onclick="resetSim(event, ${idx})" class="text-[10px] text-indigo-400 underline ml-2">Reset</button>` 
+                const simBadge = st.isSimmed
+                    ? `<button onclick="resetSim(event, ${idx})" class="text-[10px] text-indigo-300 underline ml-2">Reset</button>`
                     : "";
 
                 list.innerHTML += `
-                    <div onclick="openSubjectModal(${idx})" class="glass p-4 rounded-2xl border ${isSafe ? 'border-slate-800 hover:border-indigo-500/50' : 'border-rose-500/30 hover:border-rose-500/60'} cursor-pointer active:scale-[0.99] transition">
+                    <div onclick="openSubjectModal(${idx})" class="glass p-4 rounded-2xl border ${isSafe ? 'border-slate-800 hover:border-indigo-500/50' : 'border-rose-500/35 hover:border-rose-500/65'} cursor-pointer active:scale-[0.99] transition">
                         <div class="flex justify-between items-start gap-3">
                             <div>
                                 <div class="flex items-center gap-2">
                                     <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-800 text-indigo-300">${sub.tag}</span>
-                                    <span class="text-[11px] text-slate-500">${sub.code}</span>
+                                    <span class="text-[11px] text-slate-400">${sub.code}</span>
                                 </div>
                                 <h3 class="font-semibold text-sm text-white mt-1.5 leading-snug">${sub.name}</h3>
                             </div>
                             <div class="text-right">
                                 <span class="text-xl font-extrabold ${isSafe ? 'text-emerald-400' : 'text-rose-400'}">${pctDisplay}%</span>
-                                <p class="text-[10px] text-indigo-400 mt-0.5">Dates & PYQs ›</p>
+                                <p class="text-[10px] text-indigo-300 mt-0.5">Dates & PYQs ›</p>
                             </div>
                         </div>
 
-                        <div class="w-full bg-slate-800/90 h-1.5 rounded-full my-3 overflow-hidden">
+                        <div class="w-full bg-slate-800 h-1.5 rounded-full my-3 overflow-hidden">
                             <div class="h-full rounded-full transition-all duration-300 ${isSafe ? 'bg-emerald-400' : 'bg-rose-500'}" style="width: ${Math.min(pct, 100)}%"></div>
                         </div>
 
-                        <div class="flex justify-between items-center text-xs text-slate-400">
-                            <span>Attended: <b class="text-slate-200">${att}</b> / ${tot} ${simBadge}</span>
+                        <div class="flex justify-between items-center text-xs text-slate-300">
+                            <span>Attended: <b class="text-white">${att}</b> / ${tot} ${simBadge}</span>
                             <span>${insight}</span>
                         </div>
 
-                        <div class="mt-3 pt-2.5 border-t border-slate-800/70 flex justify-between items-center">
-                            <span class="text-[11px] text-slate-500">Simulator:</span>
+                        <div class="mt-3 pt-2.5 border-t border-slate-800 flex justify-between items-center">
+                            <span class="text-[11px] text-slate-400">Simulator:</span>
                             <div class="flex gap-1.5">
-                                <button onclick="simulate(event, ${idx}, 1, 1)" class="text-[11px] bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 px-2.5 py-1 rounded-lg transition">+ Attend</button>
-                                <button onclick="simulate(event, ${idx}, 0, 1)" class="text-[11px] bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 px-2.5 py-1 rounded-lg transition">+ Bunk</button>
+                                <button onclick="simulate(event, ${idx}, 1, 1)" class="text-[11px] bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/25 px-2.5 py-1 rounded-lg transition">+ Attend</button>
+                                <button onclick="simulate(event, ${idx}, 0, 1)" class="text-[11px] bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/25 px-2.5 py-1 rounded-lg transition">+ Bunk</button>
                             </div>
                         </div>
                     </div>
                 `;
             });
 
-            const overallPct = grandTot > 0 ? ((grandAtt / grandTot) * 100).toFixed(1) : 0;
+            const overallPct = grandTot > 0 ? ((grandAtt / grandTot) * 100).toFixed(1) : "0.0";
             document.getElementById('overallPercentText').innerText = `${overallPct}%`;
             document.getElementById('overallFraction').innerText = `${grandAtt} of ${grandTot} classes attended`;
             const ring = document.getElementById('overallRing');
-            ring.setAttribute('stroke-dasharray', `${Math.min(overallPct, 100)}, 100`);
-            ring.className = `transition-all duration-700 ${overallPct >= targetPercent ? 'text-emerald-400' : 'text-rose-500'}`;
+            ring.setAttribute('stroke-dasharray', `${Math.min(Number(overallPct), 100)}, 100`);
+            ring.className = `transition-all duration-700 ${Number(overallPct) >= targetPercent ? 'text-emerald-400' : 'text-rose-500'}`;
+
+            highlightSelectedDayBtn();
+            renderTimetable();
         }
     </script>
 
