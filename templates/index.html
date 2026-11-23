@@ -122,7 +122,7 @@
         </div>
     </main>
 
-    <!-- SUBJECT DETAIL MODAL (Dates + PYQ Actions) -->
+    <!-- SUBJECT DETAIL MODAL -->
     <div id="subjectModal" class="fixed inset-0 z-50 hidden bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onclick="closeModalOnBackdrop(event)">
         <div class="bg-[#0f1623] border border-slate-800 w-full max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[88vh] flex flex-col shadow-2xl overflow-hidden">
             
@@ -154,15 +154,15 @@
                 </div>
             </div>
 
-            <!-- METHOD 2: SMART PYQ SEARCH & CONTRIBUTE BAR -->
-            <div class="px-5 py-3 bg-indigo-950/30 border-b border-slate-800/80 flex gap-2">
+            <!-- SMART PYQ BUTTONS -->
+            <div class="px-5 py-3 bg-indigo-950/30 border-b border-slate-800/80 grid grid-cols-2 gap-2">
                 <a id="pyqSearchBtn" href="#" target="_blank" rel="noopener noreferrer"
-                   class="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold py-2.5 px-3 rounded-xl flex items-center justify-center gap-1.5 shadow transition">
-                    <span>🔍</span> Find PYQs Online
+                   class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold py-2.5 px-3 rounded-xl flex items-center justify-center gap-1.5 shadow transition">
+                    <span>🔍</span> Search PYQs
                 </a>
-                <a id="pyqContributeBtn" href="#" target="_blank" rel="noopener noreferrer"
+                <a href="https://www.dcrustedp.in/dcrustpqp" target="_blank" rel="noopener noreferrer"
                    class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold py-2.5 px-3 rounded-xl flex items-center justify-center gap-1.5 transition">
-                    <span>📤</span> Upload PYQ
+                    <span>🏛️</span> DCRUST PYQ Portal
                 </a>
             </div>
 
@@ -180,9 +180,6 @@
     </div>
 
     <script>
-        // Replace this with your Google Form / Google Drive community upload link whenever ready!
-        const CONTRIBUTE_LINK = "https://forms.google.com";
-
         let currentSessionId = "";
         let appData = null;
         let simState = {};
@@ -192,7 +189,7 @@
         let modalLogFilter = "ALL";
 
         window.onload = () => {
-            const cached = localStorage.getItem("dcrust_att_cache_v2");
+            const cached = localStorage.getItem("dcrust_att_cache_v3");
             if (cached) {
                 appData = JSON.parse(cached);
                 renderDashboard();
@@ -210,7 +207,7 @@
         }
 
         function logout() {
-            localStorage.removeItem("dcrust_att_cache_v2");
+            localStorage.removeItem("dcrust_att_cache_v3");
             appData = null;
             simState = {};
             document.getElementById('password').value = "";
@@ -262,7 +259,7 @@
                     data.timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                     appData = data;
                     simState = {};
-                    localStorage.setItem("dcrust_att_cache_v2", JSON.stringify(data));
+                    localStorage.setItem("dcrust_att_cache_v3", JSON.stringify(data));
                     renderDashboard();
                 } else {
                     alert(data.message);
@@ -308,12 +305,21 @@
             renderDashboard();
         }
 
-        function formatHumanDate(isoDate) {
-            const d = new Date(isoDate + "T00:00:00");
-            return d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+        function formatHumanDate(rawDate) {
+            // Handle YYYY-MM-DD
+            if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+                const d = new Date(rawDate + "T00:00:00");
+                if (!isNaN(d)) return d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+            }
+            // Handle DD-MM-YYYY or DD/MM/YYYY
+            const m = rawDate.match(/^(\d{2})[-/](\d{2})[-/](\d{4})$/);
+            if (m) {
+                const d = new Date(`${m[3]}-${m[2]}-${m[1]}T00:00:00`);
+                if (!isNaN(d)) return d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+            }
+            return rawDate;
         }
 
-        // OPEN SUBJECT DETAIL MODAL + DYNAMIC PYQ SEARCH URL
         function openSubjectModal(idx) {
             selectedSubjectIndex = idx;
             modalLogFilter = "ALL";
@@ -324,10 +330,10 @@
             document.getElementById('modalCode').innerText = sub.code;
             document.getElementById('modalTitle').innerText = sub.name;
 
-            // Build automatic Google PYQ search link for this exact DCRUST subject
-            const searchQuery = encodeURIComponent(`DCRUST ${sub.code} "${sub.name}" previous year question paper PYQ pdf`);
+            // Remove "For Engineers" filler words and strict quotes so Google finds actual DCRUST papers
+            const cleanTopic = sub.name.replace(/for engineers/i, '').trim();
+            const searchQuery = encodeURIComponent(`DCRUST ${cleanTopic} previous year question paper`);
             document.getElementById('pyqSearchBtn').href = `https://www.google.com/search?q=${searchQuery}`;
-            document.getElementById('pyqContributeBtn').href = CONTRIBUTE_LINK;
 
             const presentCnt = logs.filter(l => l.status === "PRESENT").length || sub.attended;
             const absentCnt = logs.filter(l => l.status === "ABSENT").length || Math.max(sub.total - sub.attended, 0);
@@ -367,14 +373,14 @@
         function renderModalLogs() {
             const sub = appData.subjects[selectedSubjectIndex];
             const container = document.getElementById('modalLogsList');
-            const logs = [...(sub.logs || [])].sort((a, b) => b.date.localeCompare(a.date));
+            const logs = [...(sub.logs || [])];
 
             const filtered = modalLogFilter === "ALL" 
                 ? logs 
                 : logs.filter(l => l.status === modalLogFilter);
 
             if (!filtered.length) {
-                container.innerHTML = `<p class="text-xs text-slate-400 text-center py-8">No records found for this filter. (Click ↻ Sync if logs are empty)</p>`;
+                container.innerHTML = `<p class="text-xs text-slate-400 text-center py-8">No records found. Click ↻ Sync at the top right to fetch fresh dates.</p>`;
                 return;
             }
 

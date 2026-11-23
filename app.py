@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 import base64
 import uuid
 import re
+import math
 
 app = Flask(__name__)
 sessions = {}
@@ -46,11 +47,47 @@ def init_login():
     except Exception as e:
         return jsonify({"status": "error", "message": f"DCRUST server unreachable: {str(e)}"})
 
+def parse_date_rows(soup, subject_name, tag):
+    """Flexibly extracts [Date, Time, Status] rows regardless of column order or date format."""
+    logs = []
+    date_pattern = re.compile(r'(\d{4}[-/]\d{2}[-/]\d{2}|\d{2}[-/]\d{2}[-/]\d{4}|\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})')
+    status_keywords = {"PRESENT", "ABSENT", "LEAVE", "LATE", "MEDICAL"}
+
+    for table in soup.find_all('table'):
+        for row in table.find_all('tr'):
+            cols = [c.get_text(" ", strip=True) for c in row.find_all('td')]
+            if len(cols) < 3:
+                continue
+
+            found_date = None
+            found_status = None
+            found_time = ""
+
+            for col in cols:
+                upper_col = col.upper().strip()
+                if upper_col in status_keywords:
+                    found_status = upper_col
+                elif date_pattern.search(col) and not found_date:
+                    found_date = date_pattern.search(col).group(1)
+                elif (":" in col or "AM" in upper_col or "PM" in upper_col) and not found_time:
+                    found_time = col
+
+            if found_date and found_status:
+                logs.append({
+                    "date": found_date,
+                    "time": found_time or "Scheduled Slot",
+                    "status": found_status,
+                    "subject": subject_name,
+                    "tag": tag
+                })
+    return logs
+
 def fetch_single_subject(session, row_data):
-    """Fetches a single subject's attendance in parallel."""
+    """Fetches summary + all paginated date logs for one subject."""
     try:
         detail_res = session.get(row_data["url"], headers=HEADERS, timeout=15)
-        detail_text = BeautifulSoup(detail_res.text, 'html.parser').get_text(" ", strip=True)
+        soup = BeautifulSoup(detail_res.text, 'html.parser')
+        detail_text = soup.get_text(" ", strip=True)
 
         total_match = re.search(r'Total Classes Taken:\s*(\d+)', detail_text)
         present_match = re.search(r'Present Count:\s*(\d+)', detail_text)
@@ -64,6 +101,16 @@ def fetch_single_subject(session, row_data):
             effective_total = max(total_taken - leave_count, 1)
             exact_percent = float(percent_match.group(1)) if percent_match else round((present_count / effective_total) * 100, 2)
 
+            all_logs = parse_date_rows(soup, row_data["name"], row_data["tag"])
+
+            total_pages = math.ceil(total_taken / 20)
+            for page_num in range(2, total_pages + 1):
+                sep = "&" if "?" in row_data["url"] else "?"
+                page_url = f"{row_data['url']}{sep}page={page_num}"
+                p_res = session.get(page_url, headers=HEADERS, timeout=15)
+                p_soup = BeautifulSoup(p_res.text, 'html.parser')
+                all_logs.extend(parse_date_rows(p_soup, row_data["name"], row_data["tag"]))
+
             return {
                 "code": row_data["code"],
                 "name": row_data["name"],
@@ -71,7 +118,8 @@ def fetch_single_subject(session, row_data):
                 "attended": present_count,
                 "total": effective_total,
                 "leaves": leave_count,
-                "percentage": exact_percent
+                "percentage": exact_percent,
+                "logs": all_logs
             }
     except Exception:
         return None
@@ -126,7 +174,6 @@ def get_attendance():
                         detail_url = href if href.startswith("http") else BASE_URL + href
                         tasks.append({"code": code, "name": clean_name, "tag": tag, "url": detail_url})
 
-        # Fetch all subjects simultaneously (takes ~1.5s instead of 12s)
         with ThreadPoolExecutor(max_workers=10) as executor:
             results = list(executor.map(lambda t: fetch_single_subject(session, t), tasks))
 
@@ -134,7 +181,6 @@ def get_attendance():
         if not subjects:
             return jsonify({"status": "error", "message": "Could not parse attendance records."})
 
-        # Calculate overall stats
         total_attended = sum(s["attended"] for s in subjects)
         total_classes = sum(s["total"] for s in subjects)
         overall_percent = round((total_attended / max(total_classes, 1)) * 100, 2)
