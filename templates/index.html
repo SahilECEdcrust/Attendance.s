@@ -51,7 +51,7 @@
         }
 
         body.dark-theme .surface-card {
-            background: rgba(15, 23, 42, 0.86);
+            background: rgba(15, 23, 42, 0.88);
             border: 1px solid rgba(148, 163, 184, 0.16);
             box-shadow: 0 14px 34px -12px rgba(0, 0, 0, 0.55);
         }
@@ -61,11 +61,6 @@
             box-shadow: 0 16px 36px -12px rgba(15, 23, 42, 0.28);
         }
 
-        body.dark-theme .interactive-card:hover {
-            box-shadow: 0 18px 38px -12px rgba(0, 0, 0, 0.68);
-        }
-
-        /* Dark-theme utility overrides for crisp readability */
         body.dark-theme .text-slate-900 { color: #f8fafc !important; }
         body.dark-theme .text-slate-700 { color: #cbd5e1 !important; }
         body.dark-theme .text-slate-600 { color: #94a3b8 !important; }
@@ -145,7 +140,6 @@
 
     <!-- ANIMATED BACKGROUND STAGE -->
     <div id="bgStage" class="bg-mode-anime">
-        <!-- Anime Sky, Moon & Mountain Silhouettes -->
         <div id="animeLayer" class="absolute inset-0">
             <div class="absolute top-12 right-10 w-24 h-24 rounded-full bg-amber-100/90 shadow-[0_0_65px_22px_rgba(254,243,199,0.58)] float-slow"></div>
             <div class="absolute top-20 left-8 w-14 h-14 rounded-full bg-pink-200/25 blur-xl"></div>
@@ -155,7 +149,6 @@
             </svg>
         </div>
 
-        <!-- Incredible India States Scenery Layer -->
         <div id="indiaLayer" class="hidden absolute inset-0">
             <svg class="absolute -top-16 -right-16 w-72 h-72 text-white/25 spin-slow" viewBox="0 0 200 200">
                 <circle cx="100" cy="100" r="86" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="6 4"/>
@@ -167,7 +160,6 @@
                     <line x1="161" y1="39" x2="39" y2="161"/>
                 </g>
             </svg>
-
             <svg class="absolute bottom-0 w-full h-72 opacity-55" viewBox="0 0 1440 360" preserveAspectRatio="none">
                 <polygon points="120,360 340,120 560,360" fill="#134e4a"/>
                 <polygon points="430,360 690,90 950,360" fill="#115e59"/>
@@ -177,40 +169,50 @@
             </svg>
         </div>
 
-        <!-- Particle Canvas -->
         <canvas id="particleCanvas" class="absolute inset-0 w-full h-full"></canvas>
     </div>
 
     <div class="relative z-10">
-        <!-- Top Navbar -->
-        <nav class="sticky top-0 z-30 surface-card border-b border-white/70 px-4 py-3">
-            <div class="max-w-lg mx-auto flex justify-between items-center gap-1.5">
-                <div class="flex items-center gap-2">
+        <!-- Top Navbar (Clean & Non-Clipped) -->
+        <nav class="sticky top-0 z-30 surface-card border-b border-white/70 px-3 sm:px-4 py-2.5">
+            <div class="max-w-xl mx-auto flex flex-wrap items-center justify-between gap-2">
+                <div class="flex items-center gap-2 shrink-0">
                     <div class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 flex items-center justify-center font-extrabold text-white shadow-md shadow-indigo-600/25">D</div>
                     <div>
-                        <span class="font-bold text-base sm:text-lg tracking-tight text-slate-900 leading-none block">DCRUST<span class="text-indigo-600">Track</span></span>
+                        <span class="font-bold text-base tracking-tight text-slate-900 leading-none block">DCRUST<span class="text-indigo-600">Track</span></span>
                         <span class="text-[10px] text-slate-600 font-medium block mt-0.5">Created with ❤️ by Sahil</span>
                     </div>
                 </div>
 
-                <div class="flex items-center gap-1">
-                    <!-- Dark / Light Mode Toggle -->
+                <div class="flex items-center gap-1.5 flex-wrap">
                     <button onclick="toggleDarkMode()" id="darkModeBtn" title="Toggle Dark Mode"
-                        class="text-xs font-bold px-2.5 py-1.5 rounded-xl bg-slate-100/95 hover:bg-slate-200 text-slate-700 border border-slate-200/80 transition">
+                        class="text-xs font-bold px-2.5 py-1.5 rounded-xl bg-slate-100/95 hover:bg-slate-200 text-slate-700 border border-slate-200/80 transition shrink-0">
                         🌙
                     </button>
 
-                    <!-- Background Scene Switcher -->
-                    <div class="flex items-center bg-slate-100/95 p-1 rounded-xl border border-slate-200/80">
+                    <div class="flex items-center bg-slate-100/95 p-0.5 rounded-xl border border-slate-200/80 shrink-0">
                         <button onclick="setBgMode('anime')" id="bgBtnAnime" title="Anime Sky & Sakura" class="text-[11px] font-bold px-2 py-1 rounded-lg bg-indigo-600 text-white transition">🌸</button>
                         <button onclick="setBgMode('india')" id="bgBtnIndia" title="Indian States Scenery" class="text-[11px] font-bold px-2 py-1 rounded-lg text-slate-700 hover:bg-white transition">🇮🇳</button>
                         <button onclick="setBgMode('clean')" id="bgBtnClean" title="Clean Minimal" class="text-[11px] font-bold px-2 py-1 rounded-lg text-slate-700 hover:bg-white transition">✨</button>
                     </div>
 
-                    <div id="navActions" class="hidden flex items-center gap-1">
-                        <button onclick="copySummary()" id="copyBtn" title="Copy Summary" class="text-xs font-semibold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-2 py-1.5 rounded-lg border border-indigo-200 transition">📋</button>
-                        <button onclick="showLogin()" title="Re-sync Samarth" class="text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-1.5 rounded-lg border border-slate-200 transition">↻</button>
-                        <button onclick="logout()" title="Clear Cache" class="text-xs font-semibold bg-rose-50 hover:bg-rose-100 text-rose-700 px-2 py-1.5 rounded-lg border border-rose-200 transition">Exit</button>
+                    <div id="navActions" class="hidden flex items-center gap-1.5 shrink-0">
+                        <button onclick="openShareCardModal()" id="shareImgBtn" title="Share Colorful Attendance Image"
+                            class="text-xs font-bold bg-gradient-to-r from-pink-600 to-indigo-600 hover:from-pink-700 hover:to-indigo-700 text-white px-2.5 py-1.5 rounded-xl shadow-sm transition">
+                            🖼️ Card
+                        </button>
+                        <button onclick="showLogin()" id="syncBtn" title="Sync Fresh Attendance & Timetable"
+                            class="text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white px-2.5 py-1.5 rounded-xl shadow-sm transition">
+                            ↻ Sync
+                        </button>
+                        <button onclick="copySummary()" id="copyBtn" title="Copy Text Summary"
+                            class="text-xs font-semibold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-2.5 py-1.5 rounded-xl border border-indigo-200 transition">
+                            📋
+                        </button>
+                        <button onclick="logout()" title="Clear Cache & Logout"
+                            class="text-xs font-semibold bg-rose-50 hover:bg-rose-100 text-rose-700 px-2.5 py-1.5 rounded-xl border border-rose-200 transition">
+                            Exit
+                        </button>
                     </div>
                 </div>
             </div>
@@ -226,22 +228,22 @@
                             DCRUSTM e-Samarth
                         </span>
                         <span class="text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200/80">
-                            Live Sync
+                            Private Session
                         </span>
                     </div>
                     <h1 class="text-2xl font-extrabold text-slate-900 tracking-tight">Check Attendance</h1>
                     <p class="text-slate-600 text-xs mt-1">Real-time attendance, combined L+T / L+L, bunk simulator &amp; timetable.</p>
                 </div>
 
-                <div class="space-y-4">
+                <form onsubmit="event.preventDefault(); fetchAttendance();" autocomplete="off" class="space-y-4">
                     <div>
                         <label class="block text-xs font-semibold text-slate-700 mb-1.5">Roll Number / Samarth ID</label>
-                        <input type="text" id="username" autocomplete="off" placeholder="e.g. 26001001112"
+                        <input type="text" id="username" name="samarth_id_input" value="" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Enter Roll Number"
                             class="w-full px-4 py-3 rounded-xl bg-white/95 border border-slate-200 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/15 transition">
                     </div>
                     <div>
                         <label class="block text-xs font-semibold text-slate-700 mb-1.5">Password</label>
-                        <input type="password" id="password" autocomplete="off" placeholder="••••••••"
+                        <input type="password" id="password" name="samarth_pass_input" value="" autocomplete="new-password" placeholder="••••••••"
                             class="w-full px-4 py-3 rounded-xl bg-white/95 border border-slate-200 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/15 transition">
                     </div>
 
@@ -252,15 +254,15 @@
                             <img id="captchaImg" src="" alt="Captcha" class="h-11 rounded-lg bg-white border border-slate-200 px-2 py-1">
                             <button type="button" onclick="loadLoginSession()" class="text-xs font-semibold bg-white hover:bg-slate-100 text-slate-700 px-3 py-2.5 rounded-lg border border-slate-200 transition">↻ Reload</button>
                         </div>
-                        <input type="text" id="captchaInput" autocomplete="off" placeholder="Enter characters above"
+                        <input type="text" id="captchaInput" name="samarth_captcha_input" value="" autocomplete="off" placeholder="Enter characters above"
                             class="w-full px-4 py-2.5 rounded-lg bg-white border border-slate-200 text-sm text-slate-900 focus:outline-none focus:border-indigo-500">
                     </div>
 
-                    <button onclick="fetchAttendance()" id="submitBtn"
+                    <button type="submit" id="submitBtn"
                         class="w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 active:scale-[0.99] text-white font-semibold py-3.5 rounded-xl shadow-lg shadow-indigo-600/25 transition">
                         Fetch Live Attendance
                     </button>
-                </div>
+                </form>
 
                 <p id="statusText" class="text-xs font-medium text-amber-700 text-center mt-3"></p>
                 <div class="mt-5 pt-4 border-t border-slate-200/70 flex items-center justify-between text-[11px] text-slate-600">
@@ -280,7 +282,13 @@
                                 <span id="lastUpdated" class="text-[11px] font-medium text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full"></span>
                                 <span id="simBanner" class="hidden text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full">Simulating</span>
                             </div>
-                            <h2 id="studentRoll" class="text-xl font-bold text-slate-900 mt-2"></h2>
+                            <div class="flex items-center gap-2 mt-2">
+                                <h2 id="studentRoll" class="text-xl font-bold text-slate-900"></h2>
+                                <button type="button" onclick="toggleRollPrivacy()" id="privacyRollBtn" title="Hide/Show Roll Number"
+                                    class="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition">
+                                    👁️
+                                </button>
+                            </div>
                             <p id="overallFraction" class="text-xs text-slate-600 mt-0.5"></p>
 
                             <div class="flex flex-wrap items-center gap-1.5 mt-3">
@@ -307,7 +315,6 @@
                         </div>
                     </div>
 
-                    <!-- Quick Status Strip -->
                     <div id="quickStatsStrip" class="grid grid-cols-3 gap-2 mt-4 pt-3.5 border-t border-slate-200/70 text-center">
                         <div class="bg-emerald-50/80 border border-emerald-200/70 rounded-xl py-1.5 px-2">
                             <p id="statSafeCount" class="text-sm font-extrabold text-emerald-700">0</p>
@@ -322,6 +329,11 @@
                             <p class="text-[10px] font-semibold text-indigo-800/80 uppercase">Classes</p>
                         </div>
                     </div>
+
+                    <button onclick="openShareCardModal()"
+                        class="mt-4 w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:opacity-95 text-white text-xs font-bold shadow-md transition flex items-center justify-center gap-2">
+                        <span>🎨</span> Create Colorful Graphical Attendance Card
+                    </button>
                 </div>
 
                 <!-- COMBINED ATTENDANCE SECTION (LECTURE+TUTORIAL / LECTURE+LAB) -->
@@ -348,7 +360,7 @@
                 <!-- VIEW 1: SUBJECTS SECTION -->
                 <div id="subjectsSection" class="space-y-3.5">
                     <input type="text" id="subjectSearchInput" oninput="renderDashboard()"
-                        placeholder="Search subject code or name (e.g. BSMAT103D, Physics)..."
+                        placeholder="Search subject code or name (e.g. BSMAT103D, English, Physics)..."
                         class="w-full px-3.5 py-2.5 rounded-xl surface-card text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500">
 
                     <div class="flex gap-2 overflow-x-auto pb-1">
@@ -390,6 +402,34 @@
             <span class="font-bold text-indigo-600 tracking-wide">Sahil</span>
         </div>
     </footer>
+
+    <!-- GRAPHICAL ATTENDANCE SHARE CARD MODAL -->
+    <div id="shareCardModal" class="fixed inset-0 z-50 hidden bg-slate-950/65 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4" onclick="closeShareModalOnBackdrop(event)">
+        <div class="surface-card w-full max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+            <div class="p-4 sm:p-5 border-b border-slate-200/70 flex justify-between items-center gap-2">
+                <div>
+                    <h3 class="text-base font-extrabold text-slate-900">🎨 Colorful Attendance Card</h3>
+                    <p class="text-[11px] text-slate-500">Overall + Subject attendance in a shareable image</p>
+                </div>
+                <button onclick="closeShareCardModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center text-sm">✕</button>
+            </div>
+
+            <div class="p-4 overflow-y-auto flex-1 bg-slate-900/95 flex items-center justify-center">
+                <canvas id="shareCardCanvas" class="w-full max-w-[380px] rounded-2xl shadow-2xl border border-white/15"></canvas>
+            </div>
+
+            <div class="p-4 border-t border-slate-200/70 grid grid-cols-2 gap-2.5 bg-white/90">
+                <button onclick="downloadShareCard()"
+                    class="py-2.5 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow transition flex items-center justify-center gap-1.5">
+                    <span>⬇️</span> Download PNG
+                </button>
+                <button onclick="shareCardImage()" id="nativeShareImgBtn"
+                    class="py-2.5 px-3 rounded-xl bg-gradient-to-r from-pink-600 to-amber-500 hover:opacity-95 text-white text-xs font-bold shadow transition flex items-center justify-center gap-1.5">
+                    <span>📤</span> Share Image
+                </button>
+            </div>
+        </div>
+    </div>
 
     <!-- SUBJECT DETAIL MODAL -->
     <div id="subjectModal" class="fixed inset-0 z-50 hidden bg-slate-950/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4" onclick="closeModalOnBackdrop(event)">
@@ -443,7 +483,36 @@
         let selectedDay = "Monday";
         let bgMode = "anime";
         let isDarkMode = false;
+        let hideRollNumber = false;
         let particles = [];
+
+        function clearLoginInputs() {
+            const u = document.getElementById('username');
+            const p = document.getElementById('password');
+            const c = document.getElementById('captchaInput');
+            if (u) u.value = "";
+            if (p) p.value = "";
+            if (c) c.value = "";
+        }
+
+        function formatDisplayedRoll(roll) {
+            if (!roll) return "Student";
+            if (!hideRollNumber) return `Roll: ${roll}`;
+            const tail = roll.length > 4 ? roll.slice(-4) : roll;
+            return `Roll: ••••••${tail}`;
+        }
+
+        function toggleRollPrivacy() {
+            hideRollNumber = !hideRollNumber;
+            const btn = document.getElementById('privacyRollBtn');
+            if (btn) {
+                btn.innerText = hideRollNumber ? "🙈" : "👁️";
+                btn.title = hideRollNumber ? "Show Roll Number" : "Hide Roll Number";
+            }
+            if (appData) {
+                document.getElementById('studentRoll').innerText = formatDisplayedRoll(appData.roll_no);
+            }
+        }
 
         function applyDarkMode(dark) {
             isDarkMode = !!dark;
@@ -556,6 +625,8 @@
         window.addEventListener('resize', initParticles);
 
         window.onload = () => {
+            clearLoginInputs();
+
             const savedDark = localStorage.getItem("dcrust_dark_mode") === "1";
             applyDarkMode(savedDark);
 
@@ -566,18 +637,6 @@
             const weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
             const today = weekdays[new Date().getDay()];
             selectedDay = (today === "Sunday") ? "Monday" : today;
-
-            ['username', 'password', 'captchaInput'].forEach(id => {
-                const el = document.getElementById(id);
-                if (el) {
-                    el.addEventListener('keydown', (e) => {
-                        if (e.key === 'Enter') {
-                            e.preventDefault();
-                            fetchAttendance();
-                        }
-                    });
-                }
-            });
 
             const cached = localStorage.getItem("dcrust_att_cache_v7");
             if (cached) {
@@ -592,6 +651,208 @@
                 loadLoginSession();
             }
         };
+
+        /* --- GRAPHICAL SHAREABLE CARD RENDERER --- */
+        function roundRectPath(ctx, x, y, w, h, r) {
+            const rad = Math.min(r, w / 2, h / 2);
+            ctx.beginPath();
+            ctx.moveTo(x + rad, y);
+            ctx.arcTo(x + w, y, x + w, y + h, rad);
+            ctx.arcTo(x + w, y + h, x, y + h, rad);
+            ctx.arcTo(x, y + h, x, y, rad);
+            ctx.arcTo(x, y, x + w, y, rad);
+            ctx.closePath();
+        }
+
+        function drawShareCardCanvas() {
+            if (!appData) return;
+            const canvas = document.getElementById('shareCardCanvas');
+            if (!canvas) return;
+
+            const subs = (appData.subjects || []).map((_, idx) => getSimulatedSubjectStats(idx)).filter(Boolean);
+            const grandAtt = subs.reduce((acc, s) => acc + s.att, 0);
+            const grandTot = subs.reduce((acc, s) => acc + s.tot, 0);
+            const overallPct = grandTot > 0 ? ((grandAtt / grandTot) * 100).toFixed(1) : "0.0";
+
+            const rowHeight = 76;
+            const headerHeight = 290;
+            const footerHeight = 76;
+            const width = 900;
+            const height = headerHeight + Math.max(subs.length, 1) * rowHeight + footerHeight;
+
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+
+            const bgGrad = ctx.createLinearGradient(0, 0, width, height);
+            bgGrad.addColorStop(0, "#1e1b4b");
+            bgGrad.addColorStop(0.5, "#4c1d95");
+            bgGrad.addColorStop(1, "#9d174d");
+            ctx.fillStyle = bgGrad;
+            ctx.fillRect(0, 0, width, height);
+
+            const glow1 = ctx.createRadialGradient(740, 110, 20, 740, 110, 250);
+            glow1.addColorStop(0, "rgba(251, 191, 36, 0.35)");
+            glow1.addColorStop(1, "rgba(251, 191, 36, 0)");
+            ctx.fillStyle = glow1;
+            ctx.fillRect(0, 0, width, 420);
+
+            ctx.fillStyle = "rgba(255, 255, 255, 0.14)";
+            roundRectPath(ctx, 44, 38, 250, 42, 21);
+            ctx.fill();
+
+            ctx.fillStyle = "#fde68a";
+            ctx.font = "800 18px Inter, sans-serif";
+            ctx.fillText("DCRUSTTRACK • SAMARTH", 64, 65);
+
+            ctx.fillStyle = "#e2e8f0";
+            ctx.font = "600 17px Inter, sans-serif";
+            ctx.textAlign = "right";
+            ctx.fillText(`Goal: ${targetPercent}%`, width - 48, 65);
+            ctx.textAlign = "left";
+
+            roundRectPath(ctx, 44, 98, width - 88, 164, 26);
+            ctx.fillStyle = "rgba(15, 23, 42, 0.52)";
+            ctx.fill();
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.18)";
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            ctx.fillStyle = "#f8fafc";
+            ctx.font = "800 32px Inter, sans-serif";
+            ctx.fillText(formatDisplayedRoll(appData.roll_no), 74, 152);
+
+            ctx.fillStyle = "#cbd5e1";
+            ctx.font = "500 20px Inter, sans-serif";
+            ctx.fillText(`Overall Attended: ${grandAtt} / ${grandTot} classes`, 74, 192);
+
+            const isOverallSafe = Number(overallPct) >= targetPercent;
+            ctx.textAlign = "right";
+            ctx.fillStyle = isOverallSafe ? "#34d399" : "#fb7185";
+            ctx.font = "800 54px Inter, sans-serif";
+            ctx.fillText(`${overallPct}%`, width - 74, 178);
+
+            ctx.fillStyle = isOverallSafe ? "#a7f3d0" : "#fecdd3";
+            ctx.font = "700 15px Inter, sans-serif";
+            ctx.fillText(isOverallSafe ? "SAFE ZONE" : "NEEDS CLASSES", width - 74, 212);
+            ctx.textAlign = "left";
+
+            const palette = [
+                { badgeBg: "rgba(56, 189, 248, 0.22)", badgeText: "#7dd3fc", bar: "#38bdf8" },
+                { badgeBg: "rgba(167, 139, 250, 0.24)", badgeText: "#ddd6fe", bar: "#a78bfa" },
+                { badgeBg: "rgba(244, 114, 182, 0.22)", badgeText: "#f9a8d4", bar: "#f472b6" },
+                { badgeBg: "rgba(251, 191, 36, 0.22)", badgeText: "#fde68a", bar: "#fbbf24" },
+            ];
+
+            subs.forEach((st, idx) => {
+                const y = headerHeight + idx * rowHeight;
+                const safe = st.pct >= targetPercent;
+                const tone = palette[idx % palette.length];
+
+                roundRectPath(ctx, 44, y, width - 88, rowHeight - 12, 18);
+                ctx.fillStyle = "rgba(255, 255, 255, 0.1)";
+                ctx.fill();
+
+                roundRectPath(ctx, 64, y + 15, 92, 26, 8);
+                ctx.fillStyle = tone.badgeBg;
+                ctx.fill();
+                ctx.fillStyle = tone.badgeText;
+                ctx.font = "800 12px Inter, sans-serif";
+                ctx.fillText((st.sub.tag || "CLASS").toUpperCase(), 74, y + 33);
+
+                const shortName = (st.sub.name || "").length > 36
+                    ? (st.sub.name || "").slice(0, 35) + "…"
+                    : (st.sub.name || "");
+                ctx.fillStyle = "#ffffff";
+                ctx.font = "700 20px Inter, sans-serif";
+                ctx.fillText(shortName, 170, y + 34);
+
+                ctx.fillStyle = "#cbd5e1";
+                ctx.font = "500 15px Inter, sans-serif";
+                ctx.fillText(`${st.sub.code || ""}  •  ${st.att}/${st.tot}`, 170, y + 55);
+
+                ctx.textAlign = "right";
+                ctx.fillStyle = safe ? "#4ade80" : "#fb7185";
+                ctx.font = "800 26px Inter, sans-serif";
+                ctx.fillText(`${st.pct.toFixed(1)}%`, width - 68, y + 40);
+                ctx.textAlign = "left";
+
+                const barX = 64;
+                const barY = y + rowHeight - 20;
+                const barW = width - 128;
+                roundRectPath(ctx, barX, barY, barW, 5, 3);
+                ctx.fillStyle = "rgba(255, 255, 255, 0.15)";
+                ctx.fill();
+
+                const fillW = Math.max(8, (Math.min(st.pct, 100) / 100) * barW);
+                roundRectPath(ctx, barX, barY, fillW, 5, 3);
+                ctx.fillStyle = safe ? "#4ade80" : tone.bar;
+                ctx.fill();
+            });
+
+            ctx.fillStyle = "#fde68a";
+            ctx.font = "700 17px Inter, sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillText("Created with ❤️ by Sahil • DCRUSTTrack", width / 2, height - 28);
+            ctx.textAlign = "left";
+        }
+
+        function openShareCardModal() {
+            if (!appData) return;
+            drawShareCardCanvas();
+            document.getElementById('shareCardModal').classList.remove('hidden');
+        }
+
+        function closeShareCardModal() {
+            document.getElementById('shareCardModal').classList.add('hidden');
+        }
+
+        function closeShareModalOnBackdrop(e) {
+            if (e.target.id === 'shareCardModal') closeShareCardModal();
+        }
+
+        function downloadShareCard() {
+            drawShareCardCanvas();
+            const canvas = document.getElementById('shareCardCanvas');
+            if (!canvas) return;
+            const link = document.createElement('a');
+            link.download = `DCRUST-Attendance-Card.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }
+
+        async function shareCardImage() {
+            drawShareCardCanvas();
+            const canvas = document.getElementById('shareCardCanvas');
+            if (!canvas) return;
+
+            if (navigator.canShare && canvas.toBlob) {
+                canvas.toBlob(async (blob) => {
+                    if (!blob) {
+                        downloadShareCard();
+                        return;
+                    }
+                    const file = new File([blob], `DCRUST-Attendance-Card.png`, {
+                        type: 'image/png'
+                    });
+                    try {
+                        if (navigator.canShare({ files: [file] })) {
+                            await navigator.share({
+                                title: 'My DCRUST Attendance Card',
+                                text: 'DCRUST Attendance Summary',
+                                files: [file]
+                            });
+                            return;
+                        }
+                    } catch {
+                        // Fallback to download
+                    }
+                    downloadShareCard();
+                }, 'image/png');
+            } else {
+                downloadShareCard();
+            }
+        }
 
         function getSubjectGroupKey(sub) {
             const cleanCode = (sub.code || "").trim().toUpperCase();
@@ -781,7 +1042,7 @@
             );
             const overallPct = grandTot > 0 ? ((grandAtt / grandTot) * 100).toFixed(1) : "0.0";
             const summary = [
-                `📊 DCRUST Attendance (${appData.roll_no})`,
+                `📊 DCRUST Attendance (${formatDisplayedRoll(appData.roll_no)})`,
                 `Overall: ${overallPct}% (${grandAtt}/${grandTot}) • Goal: ${targetPercent}%`,
                 ...(combinedLines.length ? ["", "Combined (L+T / L+L):", ...combinedLines] : []),
                 "",
@@ -959,8 +1220,7 @@
             document.getElementById('resultBox').classList.add('hidden');
             document.getElementById('navActions').classList.add('hidden');
             document.getElementById('loginBox').classList.remove('hidden');
-            document.getElementById('username').value = "";
-            document.getElementById('password').value = "";
+            clearLoginInputs();
             loadLoginSession();
         }
 
@@ -1185,7 +1445,7 @@
             document.getElementById('simBanner').classList.toggle('hidden', !anySimActive);
             document.getElementById('resetAllBtn').classList.toggle('hidden', !anySimActive);
 
-            document.getElementById('studentRoll').innerText = `Roll: ${appData.roll_no}`;
+            document.getElementById('studentRoll').innerText = formatDisplayedRoll(appData.roll_no);
             document.getElementById('lastUpdated').innerText = `Synced at ${appData.timestamp || 'Just now'}`;
 
             renderCombinedAttendance();
