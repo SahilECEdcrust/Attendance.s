@@ -15,6 +15,12 @@ app = Flask(__name__)
 SAMARTH_BASE_URL = "https://dcrustm.samarth.edu.in"
 SAMARTH_LOGIN_URL = f"{SAMARTH_BASE_URL}/"
 ATTENDANCE_INDEX_URL = f"{SAMARTH_BASE_URL}/index.php/student-attendance/attendance/index"
+TIMETABLE_CANDIDATE_URLS = [
+    f"{SAMARTH_BASE_URL}/index.php/student-attendance/attendance/view-time-table",
+    f"{SAMARTH_BASE_URL}/index.php/student-attendance/attendance/time-table",
+    f"{SAMARTH_BASE_URL}/index.php/student-attendance/time-table/index",
+    f"{SAMARTH_BASE_URL}/index.php/timetable/student-timetable/index",
+]
 
 DEFAULT_HEADERS = {
     "User-Agent": (
@@ -213,7 +219,6 @@ def parse_view_attendance_page(sess, initial_html, page_url, fallback_class, fal
         leave_cnt = sum(1 for item in logs if item["status"] == "LEAVE")
 
     base_total = total_taken if total_taken > 0 else (present_cnt + absent_cnt + leave_cnt)
-    # Formula: Present / (Total Classes - Leave)
     attended = present_cnt
     effective_total = base_total - leave_cnt
     total = effective_total if effective_total > 0 else base_total
@@ -232,8 +237,37 @@ def parse_view_attendance_page(sess, initial_html, page_url, fallback_class, fal
     }
 
 
+DAY_MAP = {
+    "mon": "Monday",
+    "monday": "Monday",
+    "tue": "Tuesday",
+    "tues": "Tuesday",
+    "tuesday": "Tuesday",
+    "wed": "Wednesday",
+    "wednesday": "Wednesday",
+    "thu": "Thursday",
+    "thur": "Thursday",
+    "thurs": "Thursday",
+    "thursday": "Thursday",
+    "fri": "Friday",
+    "friday": "Friday",
+    "sat": "Saturday",
+    "saturday": "Saturday",
+}
+
+
+def canonical_day(text):
+    cleaned = re.sub(r"[^a-z]", "", (text or "").lower())
+    return DAY_MAP.get(cleaned)
+
+
+def is_empty_slot(val):
+    low = (val or "").strip().lower()
+    return not low or low in ("-", "--", "---", "free", "break", "lunch", "na", "n/a", "nil", "off")
+
+
 def parse_timetable_from_soup(soup):
-    """Extracts weekly Monday–Saturday schedule if a timetable table is present."""
+    """Extracts weekly Monday–Saturday schedule across row-based, column-based, or list tables."""
     timetable = {
         "Monday": [],
         "Tuesday": [],
@@ -242,27 +276,119 @@ def parse_timetable_from_soup(soup):
         "Friday": [],
         "Saturday": [],
     }
-    days_re = re.compile(r"\b(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday)\b", re.I)
 
     for table in soup.find_all("table"):
-        if not days_re.search(table.get_text(" ", strip=True)):
+        rows = table.find_all("tr")
+        if len(rows) < 2:
             continue
-        headers = [th.get_text(" ", strip=True) for th in table.find_all("th")]
-        for row in table.find_all("tr"):
-            cells = [c.get_text(" ", strip=True) for c in row.find_all("td")]
-            if len(cells) < 2:
-                continue
-            day_match = days_re.search(cells[0])
-            if day_match:
-                day_name = day_match.group(1).capitalize()
-                for idx, slot_val in enumerate(cells[1:], start=1):
-                    cleaned = " ".join(slot_val.split())
-                    if cleaned and cleaned.lower() not in ("-", "--", "free", "break", "lunch", "na", "n/a"):
-                        slot_time = headers[idx] if idx < len(headers) and headers[idx] else f"Slot {idx}"
+
+        grid = []
+        for tr in rows:
+            cells = [" ".join(c.get_text(" ", strip=True).split()) for c in tr.find_all(["th", "td"])]
+            if cells:
+                grid.append(cells)
+
+        if len(grid) < 2:
+            continue
+
+        # Case 1: Header row has Days (Monday, Tuesday, ...) and rows are Time Slots
+        header_days = {}
+        for col_idx, cell in enumerate(grid[0]):
+            d = canonical_day(cell)
+            if d:
+                header_days[col_idx] = d
+
+        if len(header_days) >= 3:
+            for row in grid[1:]:
+                slot_time = row[0] if row else "Scheduled Slot"
+                for col_idx, day_name in header_days.items():
+                    if col_idx < len(row) and not is_empty_slot(row[col_idx]):
                         timetable[day_name].append({
                             "time": slot_time,
-                            "raw": cleaned,
+                            "raw": row[col_idx],
                         })
+            if any(timetable.values()):
+                return timetable
+
+        # Case 2: First column has Days (Monday, Tuesday, ...) and columns are Time Slots OR List Columns
+        col0_days = [canonical_day(r[0]) for r in grid[1:] if r]
+        if sum(1 for d in col0_days if d) >= 2:
+            headers = grid[0]
+            # Check if this is a list table like [Day, Time, Class/Subject, ...]
+            header_joined = " ".join(headers).lower()
+            if "time" in header_joined and any(k in header_joined for k in ("class", "course", "subject")):
+                time_col = next((i for i, h in enumerate(headers) if "time" in h.lower()), 1)
+                for row in grid[1:]:
+                    day_name = canonical_day(row[0]) if row else None
+                    if not day_name:
+                        continue
+                    slot_time = row[time_col] if time_col < len(row) else "Scheduled Slot"
+                    details = [
+                        row[i] for i in range(1, len(row))
+                        if i != time_col and not is_empty_slot(row[i])
+                    ]
+                    if details:
+                        timetable[day_name].append({
+                            "time": slot_time,
+                            "raw": " — ".join(details),
+                        })
+            else:
+                for row in grid[1:]:
+                    day_name = canonical_day(row[0]) if row else None
+                    if not day_name:
+                        continue
+                    for col_idx in range(1, len(row)):
+                        if not is_empty_slot(row[col_idx]):
+                            slot_time = (
+                                headers[col_idx]
+                                if col_idx < len(headers) and headers[col_idx]
+                                else f"Slot {col_idx}"
+                            )
+                            timetable[day_name].append({
+                                "time": slot_time,
+                                "raw": row[col_idx],
+                            })
+            if any(timetable.values()):
+                return timetable
+
+    return timetable
+
+
+def fetch_samarth_timetable(sess, index_soup, index_url):
+    """Finds and parses the student timetable from the index page or Samarth timetable endpoints."""
+    timetable = parse_timetable_from_soup(index_soup)
+    if any(timetable.values()):
+        return timetable
+
+    candidate_urls = []
+    for tag in index_soup.find_all(["a", "button"], href=True):
+        label = tag.get_text(" ", strip=True).lower()
+        href = tag["href"].strip()
+        if "time" in label or "timetable" in href.lower() or "time-table" in href.lower():
+            candidate_urls.append(urljoin(index_url, href))
+
+    for tag in index_soup.find_all(attrs={"onclick": True}):
+        oc = tag.get("onclick") or ""
+        m = re.search(r"['\"]([^'\"]*(?:time-?table|routine|schedule)[^'\"]*)['\"]", oc, re.I)
+        if m:
+            candidate_urls.append(urljoin(index_url, m.group(1)))
+
+    candidate_urls.extend(TIMETABLE_CANDIDATE_URLS)
+
+    seen = set()
+    for url in candidate_urls:
+        if not url or url in seen or url.startswith("javascript:"):
+            continue
+        seen.add(url)
+        try:
+            res = sess.get(url, timeout=12, allow_redirects=True)
+            if res.ok and "loginform[password]" not in res.text.lower():
+                parsed = parse_timetable_from_soup(BeautifulSoup(res.text, "html.parser"))
+                if any(parsed.values()):
+                    return parsed
+        except Exception:
+            continue
+
     return timetable
 
 
@@ -275,22 +401,7 @@ def fetch_samarth_data(sess, roll_no):
         raise RuntimeError("Samarth session was not authenticated.")
 
     soup = BeautifulSoup(idx_res.text, "html.parser")
-    timetable = parse_timetable_from_soup(soup)
-
-    for a in soup.find_all("a", href=True):
-        label_l = a.get_text(" ", strip=True).lower()
-        if "time" in label_l and "table" in label_l:
-            tt_url = urljoin(idx_res.url, a["href"])
-            try:
-                tt_res = sess.get(tt_url, timeout=12)
-                if tt_res.ok:
-                    parsed_tt = parse_timetable_from_soup(BeautifulSoup(tt_res.text, "html.parser"))
-                    for day, slots in parsed_tt.items():
-                        if slots and not timetable[day]:
-                            timetable[day] = slots
-            except Exception:
-                pass
-            break
+    timetable = fetch_samarth_timetable(sess, soup, idx_res.url)
 
     enrolled_items = []
     seen_urls = set()
