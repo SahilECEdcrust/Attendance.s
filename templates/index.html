@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#f8fafc">
+    <meta name="theme-color" content="#f8fafc" id="themeColorMeta">
     <title>DCRUST Attendance • Smart Bunk &amp; Timetable</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -13,6 +13,7 @@
             background-color: #0f172a;
             overflow-x: hidden;
             font-variant-numeric: tabular-nums;
+            transition: color 0.3s ease;
         }
 
         #bgStage {
@@ -36,19 +37,91 @@
             background: radial-gradient(circle at top, #e0e7ff 0%, #f8fafc 52%, #f1f5f9 100%);
         }
 
+        body.dark-theme .bg-mode-clean {
+            background: radial-gradient(circle at top, #1e1b4b 0%, #090d16 55%, #020617 100%);
+        }
+
         .surface-card {
             background: rgba(255, 255, 255, 0.92);
             backdrop-filter: blur(16px);
             -webkit-backdrop-filter: blur(16px);
             border: 1px solid rgba(255, 255, 255, 0.72);
             box-shadow: 0 12px 32px -12px rgba(15, 23, 42, 0.22);
-            transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+            transition: background-color 0.3s ease, border-color 0.3s ease, transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        body.dark-theme .surface-card {
+            background: rgba(15, 23, 42, 0.86);
+            border: 1px solid rgba(148, 163, 184, 0.16);
+            box-shadow: 0 14px 34px -12px rgba(0, 0, 0, 0.55);
         }
 
         .interactive-card:hover {
             transform: translateY(-2px);
             box-shadow: 0 16px 36px -12px rgba(15, 23, 42, 0.28);
         }
+
+        body.dark-theme .interactive-card:hover {
+            box-shadow: 0 18px 38px -12px rgba(0, 0, 0, 0.68);
+        }
+
+        /* Dark-theme utility overrides for crisp readability */
+        body.dark-theme .text-slate-900 { color: #f8fafc !important; }
+        body.dark-theme .text-slate-700 { color: #cbd5e1 !important; }
+        body.dark-theme .text-slate-600 { color: #94a3b8 !important; }
+        body.dark-theme .text-slate-500 { color: #94a3b8 !important; }
+        body.dark-theme .bg-white,
+        body.dark-theme .bg-white\/95,
+        body.dark-theme .bg-white\/90,
+        body.dark-theme .bg-white\/85,
+        body.dark-theme .bg-white\/80 {
+            background-color: rgba(30, 41, 59, 0.9) !important;
+        }
+        body.dark-theme .bg-slate-100,
+        body.dark-theme .bg-slate-100\/95,
+        body.dark-theme .bg-slate-50 {
+            background-color: rgba(30, 41, 59, 0.85) !important;
+        }
+        body.dark-theme .bg-slate-200 {
+            background-color: rgba(51, 65, 85, 0.85) !important;
+        }
+        body.dark-theme .border-slate-200,
+        body.dark-theme .border-slate-200\/90,
+        body.dark-theme .border-slate-200\/80,
+        body.dark-theme .border-slate-200\/70,
+        body.dark-theme .border-slate-100,
+        body.dark-theme .border-white\/75,
+        body.dark-theme .border-white\/70 {
+            border-color: rgba(148, 163, 184, 0.16) !important;
+        }
+        body.dark-theme .text-indigo-600,
+        body.dark-theme .text-indigo-700 { color: #818cf8 !important; }
+        body.dark-theme .bg-indigo-50 { background-color: rgba(99, 102, 241, 0.16) !important; }
+        body.dark-theme .border-indigo-100,
+        body.dark-theme .border-indigo-200 { border-color: rgba(99, 102, 241, 0.32) !important; }
+        body.dark-theme .text-emerald-700,
+        body.dark-theme .text-emerald-800\/80 { color: #34d399 !important; }
+        body.dark-theme .bg-emerald-50,
+        body.dark-theme .bg-emerald-50\/80 { background-color: rgba(16, 185, 129, 0.14) !important; }
+        body.dark-theme .border-emerald-200,
+        body.dark-theme .border-emerald-200\/80,
+        body.dark-theme .border-emerald-200\/70 { border-color: rgba(16, 185, 129, 0.3) !important; }
+        body.dark-theme .text-rose-700,
+        body.dark-theme .text-rose-800\/80 { color: #fb7185 !important; }
+        body.dark-theme .bg-rose-50,
+        body.dark-theme .bg-rose-50\/80 { background-color: rgba(244, 63, 94, 0.14) !important; }
+        body.dark-theme .border-rose-200,
+        body.dark-theme .border-rose-200\/80,
+        body.dark-theme .border-rose-200\/70 { border-color: rgba(244, 63, 94, 0.3) !important; }
+        body.dark-theme .text-sky-700,
+        body.dark-theme .text-sky-800\/80 { color: #38bdf8 !important; }
+        body.dark-theme .bg-sky-50 { background-color: rgba(14, 165, 233, 0.14) !important; }
+        body.dark-theme .border-sky-200\/80 { border-color: rgba(14, 165, 233, 0.3) !important; }
+        body.dark-theme .text-amber-700,
+        body.dark-theme .text-amber-800 { color: #fbbf24 !important; }
+        body.dark-theme .bg-amber-50,
+        body.dark-theme .bg-amber-50\/95 { background-color: rgba(245, 158, 11, 0.16) !important; }
+        body.dark-theme .border-amber-200 { border-color: rgba(245, 158, 11, 0.32) !important; }
 
         @keyframes floatSlow {
             0%, 100% { transform: translateY(0px) translateX(0px); }
@@ -64,7 +137,7 @@
         .spin-slow { animation: spinSlow 52s linear infinite; }
 
         ::-webkit-scrollbar { width: 5px; height: 5px; }
-        ::-webkit-scrollbar-track { background: rgba(241, 245, 249, 0.75); }
+        ::-webkit-scrollbar-track { background: rgba(241, 245, 249, 0.4); }
         ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 9999px; }
     </style>
 </head>
@@ -111,26 +184,33 @@
     <div class="relative z-10">
         <!-- Top Navbar -->
         <nav class="sticky top-0 z-30 surface-card border-b border-white/70 px-4 py-3">
-            <div class="max-w-lg mx-auto flex justify-between items-center gap-2">
-                <div class="flex items-center gap-2.5">
-                    <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 flex items-center justify-center font-extrabold text-white shadow-md shadow-indigo-600/25">D</div>
+            <div class="max-w-lg mx-auto flex justify-between items-center gap-1.5">
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 flex items-center justify-center font-extrabold text-white shadow-md shadow-indigo-600/25">D</div>
                     <div>
-                        <span class="font-bold text-lg tracking-tight text-slate-900 leading-none block">DCRUST<span class="text-indigo-600">Track</span></span>
+                        <span class="font-bold text-base sm:text-lg tracking-tight text-slate-900 leading-none block">DCRUST<span class="text-indigo-600">Track</span></span>
                         <span class="text-[10px] text-slate-600 font-medium block mt-0.5">Created with ❤️ by Sahil</span>
                     </div>
                 </div>
 
-                <div class="flex items-center gap-1.5">
+                <div class="flex items-center gap-1">
+                    <!-- Dark / Light Mode Toggle -->
+                    <button onclick="toggleDarkMode()" id="darkModeBtn" title="Toggle Dark Mode"
+                        class="text-xs font-bold px-2.5 py-1.5 rounded-xl bg-slate-100/95 hover:bg-slate-200 text-slate-700 border border-slate-200/80 transition">
+                        🌙
+                    </button>
+
+                    <!-- Background Scene Switcher -->
                     <div class="flex items-center bg-slate-100/95 p-1 rounded-xl border border-slate-200/80">
-                        <button onclick="setBgMode('anime')" id="bgBtnAnime" title="Anime Sky & Sakura" class="text-[11px] font-bold px-2 py-1 rounded-lg bg-indigo-600 text-white transition">🌸 Anime</button>
-                        <button onclick="setBgMode('india')" id="bgBtnIndia" title="Indian States Scenery" class="text-[11px] font-bold px-2 py-1 rounded-lg text-slate-700 hover:bg-white transition">🇮🇳 States</button>
-                        <button onclick="setBgMode('clean')" id="bgBtnClean" title="Clean Light" class="text-[11px] font-bold px-2 py-1 rounded-lg text-slate-700 hover:bg-white transition">✨</button>
+                        <button onclick="setBgMode('anime')" id="bgBtnAnime" title="Anime Sky & Sakura" class="text-[11px] font-bold px-2 py-1 rounded-lg bg-indigo-600 text-white transition">🌸</button>
+                        <button onclick="setBgMode('india')" id="bgBtnIndia" title="Indian States Scenery" class="text-[11px] font-bold px-2 py-1 rounded-lg text-slate-700 hover:bg-white transition">🇮🇳</button>
+                        <button onclick="setBgMode('clean')" id="bgBtnClean" title="Clean Minimal" class="text-[11px] font-bold px-2 py-1 rounded-lg text-slate-700 hover:bg-white transition">✨</button>
                     </div>
 
-                    <div id="navActions" class="hidden flex items-center gap-1.5">
-                        <button onclick="copySummary()" id="copyBtn" title="Copy Summary" class="text-xs font-semibold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-2.5 py-1.5 rounded-lg border border-indigo-200 transition">📋</button>
-                        <button onclick="showLogin()" title="Re-sync Samarth" class="text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 px-2.5 py-1.5 rounded-lg border border-slate-200 transition">↻</button>
-                        <button onclick="logout()" title="Clear Cache" class="text-xs font-semibold bg-rose-50 hover:bg-rose-100 text-rose-700 px-2.5 py-1.5 rounded-lg border border-rose-200 transition">Exit</button>
+                    <div id="navActions" class="hidden flex items-center gap-1">
+                        <button onclick="copySummary()" id="copyBtn" title="Copy Summary" class="text-xs font-semibold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-2 py-1.5 rounded-lg border border-indigo-200 transition">📋</button>
+                        <button onclick="showLogin()" title="Re-sync Samarth" class="text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-1.5 rounded-lg border border-slate-200 transition">↻</button>
+                        <button onclick="logout()" title="Clear Cache" class="text-xs font-semibold bg-rose-50 hover:bg-rose-100 text-rose-700 px-2 py-1.5 rounded-lg border border-rose-200 transition">Exit</button>
                     </div>
                 </div>
             </div>
@@ -256,7 +336,7 @@
                 </div>
 
                 <!-- MAIN VIEW SWITCHER: SUBJECTS vs TIMETABLE -->
-                <div class="grid grid-cols-2 gap-2 bg-white/80 backdrop-blur-md p-1.5 rounded-2xl border border-white/70 shadow-sm">
+                <div class="grid grid-cols-2 gap-2 surface-card p-1.5 rounded-2xl">
                     <button onclick="switchMainTab('SUBJECTS')" id="tabSubjects" class="py-2.5 text-xs font-bold rounded-xl bg-indigo-600 text-white shadow-sm transition">
                         📚 Subjects
                     </button>
@@ -278,7 +358,7 @@
                         <button onclick="filterCards('Lab', this)" class="filter-pill text-xs font-semibold px-3.5 py-1.5 rounded-full bg-white/90 text-slate-700 border border-slate-200">Labs</button>
                     </div>
 
-                    <p class="text-[11px] font-medium text-white drop-shadow flex items-center gap-1.5 px-1">
+                    <p id="tapHintText" class="text-[11px] font-medium text-white drop-shadow flex items-center gap-1.5 px-1">
                         <span>💡</span> Tap any subject card to view all attendance dates.
                     </p>
 
@@ -305,15 +385,15 @@
 
     <!-- Creator Credit Footer -->
     <footer class="relative z-10 max-w-lg mx-auto px-4 mt-8 mb-6 text-center">
-        <div class="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-white/90 backdrop-blur-md border border-white/70 text-xs text-slate-700 shadow-md">
+        <div class="inline-flex items-center gap-1.5 px-4 py-2 rounded-full surface-card text-xs text-slate-700">
             <span>Created with ❤️ by</span>
             <span class="font-bold text-indigo-600 tracking-wide">Sahil</span>
         </div>
     </footer>
 
     <!-- SUBJECT DETAIL MODAL -->
-    <div id="subjectModal" class="fixed inset-0 z-50 hidden bg-slate-950/55 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4" onclick="closeModalOnBackdrop(event)">
-        <div class="bg-white border border-slate-200 w-full max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[88vh] flex flex-col shadow-2xl overflow-hidden">
+    <div id="subjectModal" class="fixed inset-0 z-50 hidden bg-slate-950/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4" onclick="closeModalOnBackdrop(event)">
+        <div class="surface-card w-full max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[88vh] flex flex-col shadow-2xl overflow-hidden">
 
             <div class="p-5 border-b border-slate-100 flex justify-between items-start gap-3">
                 <div>
@@ -362,7 +442,41 @@
         let modalLogFilter = "ALL";
         let selectedDay = "Monday";
         let bgMode = "anime";
+        let isDarkMode = false;
         let particles = [];
+
+        function applyDarkMode(dark) {
+            isDarkMode = !!dark;
+            document.body.classList.toggle('dark-theme', isDarkMode);
+            localStorage.setItem("dcrust_dark_mode", isDarkMode ? "1" : "0");
+
+            const btn = document.getElementById('darkModeBtn');
+            if (btn) {
+                btn.innerText = isDarkMode ? "☀️" : "🌙";
+                btn.title = isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode";
+            }
+
+            const meta = document.getElementById('themeColorMeta');
+            if (meta) {
+                meta.setAttribute('content', isDarkMode ? '#090d16' : '#f8fafc');
+            }
+            updateTapHintContrast();
+            if (appData) renderDashboard();
+        }
+
+        function toggleDarkMode() {
+            applyDarkMode(!isDarkMode);
+        }
+
+        function updateTapHintContrast() {
+            const hint = document.getElementById('tapHintText');
+            if (!hint) return;
+            if (bgMode === 'clean' && !isDarkMode) {
+                hint.className = "text-[11px] font-medium text-slate-600 flex items-center gap-1.5 px-1";
+            } else {
+                hint.className = "text-[11px] font-medium text-white drop-shadow flex items-center gap-1.5 px-1";
+            }
+        }
 
         function setBgMode(mode) {
             bgMode = mode;
@@ -382,6 +496,7 @@
             document.getElementById('bgBtnIndia').className = mode === 'india' ? activeCls : idleCls;
             document.getElementById('bgBtnClean').className = mode === 'clean' ? activeCls : idleCls;
 
+            updateTapHintContrast();
             initParticles();
         }
 
@@ -441,6 +556,9 @@
         window.addEventListener('resize', initParticles);
 
         window.onload = () => {
+            const savedDark = localStorage.getItem("dcrust_dark_mode") === "1";
+            applyDarkMode(savedDark);
+
             const savedBg = localStorage.getItem("dcrust_bg_mode") || "anime";
             setBgMode(savedBg);
             animateParticles();
@@ -981,7 +1099,7 @@
             document.getElementById('modalTitle').innerText = sub.name;
 
             const presentCnt = logs.filter(l => l.status === "PRESENT").length || sub.attended;
-            const absentCnt = logs.filter(l => l.status === "ABSENT").length || Math.max(sub.total - sub.attended - (sub.leaves || 0), 0);
+            const absentCnt = logs.filter(l => l.status === "ABSENT").length || Math.max(sub.total - sub.attended, 0);
             const leaveCnt = logs.filter(l => l.status === "LEAVE").length || (sub.leaves || 0);
 
             document.getElementById('modalPresentCount').innerText = presentCnt;
