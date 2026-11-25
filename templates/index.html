@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#090d16">
-    <title>DCRUST Attendance • Smart Bunk, Timetable & PYQs</title>
+    <title>DCRUST Attendance • Smart Bunk &amp; Timetable</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
@@ -42,7 +42,7 @@
             <div id="loginBox" class="glass p-6 rounded-3xl shadow-2xl">
                 <div class="mb-6">
                     <h1 class="text-2xl font-extrabold text-white">Check e-Samarth Attendance</h1>
-                    <p class="text-slate-300 text-xs mt-1">Real-time attendance, bunk simulator, timetable & PYQs.</p>
+                    <p class="text-slate-300 text-xs mt-1">Real-time attendance, combined L+T / L+L, bunk simulator &amp; timetable.</p>
                 </div>
 
                 <div class="space-y-4">
@@ -77,7 +77,7 @@
                 <p id="statusText" class="text-xs text-amber-400 text-center mt-3"></p>
                 <div class="mt-5 pt-4 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
                     <span>🔒 Zero credential storage</span>
-                    <span>📅 Bunk Sim + Timetable + PYQs</span>
+                    <span>📊 Combined L+T / L+L &amp; Bunk Sim</span>
                 </div>
             </div>
 
@@ -120,13 +120,24 @@
                     </div>
                 </div>
 
+                <!-- COMBINED ATTENDANCE SECTION (LECTURE+TUTORIAL / LECTURE+LAB) -->
+                <div class="glass p-4 rounded-2xl border border-slate-800 space-y-3">
+                    <div>
+                        <h3 class="text-sm font-bold text-white flex items-center gap-1.5">
+                            <span>🧮</span> Combined Attendance (L+T / L+L)
+                        </h3>
+                        <p class="text-[11px] text-slate-400">Merged Lecture + Tutorial and Lecture + Lab percentages per subject</p>
+                    </div>
+                    <div id="combinedAttendanceList" class="space-y-2.5"></div>
+                </div>
+
                 <!-- MAIN VIEW SWITCHER: SUBJECTS vs TIMETABLE -->
                 <div class="grid grid-cols-2 gap-2 bg-slate-900 p-1.5 rounded-2xl border border-slate-800">
                     <button onclick="switchMainTab('SUBJECTS')" id="tabSubjects" class="py-2.5 text-xs font-bold rounded-xl bg-indigo-600 text-white shadow transition">
-                        📚 Subjects & PYQs
+                        📚 Subjects
                     </button>
                     <button onclick="switchMainTab('TIMETABLE')" id="tabTimetable" class="py-2.5 text-xs font-bold rounded-xl text-slate-300 hover:text-white transition">
-                        🗓️ Timetable & Bunk
+                        🗓️ Timetable &amp; Bunk
                     </button>
                 </div>
 
@@ -140,7 +151,7 @@
                     </div>
 
                     <p class="text-[11px] text-slate-300 flex items-center gap-1.5 px-1">
-                        <span>💡</span> Tap any subject card to view latest-first dates & PYQs.
+                        <span>💡</span> Tap any subject card to view latest-first attendance dates.
                     </p>
 
                     <div id="subjectsList" class="space-y-3.5"></div>
@@ -202,17 +213,6 @@
                 </div>
             </div>
 
-            <div class="px-5 py-3 bg-indigo-950/35 border-b border-slate-800 grid grid-cols-2 gap-2">
-                <a id="pyqSearchBtn" href="#" target="_blank" rel="noopener noreferrer"
-                   class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold py-2.5 px-3 rounded-xl flex items-center justify-center gap-1.5 shadow transition">
-                    <span>🔍</span> Search PYQs
-                </a>
-                <a href="https://www.dcrustedp.in/dcrustpqp" target="_blank" rel="noopener noreferrer"
-                   class="bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-700 text-xs font-semibold py-2.5 px-3 rounded-xl flex items-center justify-center gap-1.5 transition">
-                    <span>🏛️</span> DCRUST PYQ Portal
-                </a>
-            </div>
-
             <div class="px-5 pt-3 pb-2 flex gap-2 overflow-x-auto">
                 <button onclick="filterModalLogs('ALL', this)" class="modal-pill text-xs font-medium px-3 py-1 rounded-full bg-slate-100 text-slate-900">All Dates</button>
                 <button onclick="filterModalLogs('PRESENT', this)" class="modal-pill text-xs font-medium px-3 py-1 rounded-full bg-slate-800 text-emerald-400">Present</button>
@@ -227,7 +227,7 @@
     <script>
         let currentSessionId = "";
         let appData = null;
-        let simState = {}; // { [subjectIndex]: { att: number, tot: number } }
+        let simState = {};
         let targetPercent = 75;
         let activeFilter = "ALL";
         let selectedSubjectIndex = null;
@@ -264,6 +264,112 @@
                 loadLoginSession();
             }
         };
+
+        function getSubjectGroupKey(sub) {
+            const cleanCode = (sub.code || "").trim().toUpperCase();
+            if (cleanCode) return `CODE:${cleanCode}`;
+            const cleanName = (sub.name || "")
+                .toLowerCase()
+                .replace(/\b(lecture|theory|tutorial|tute|lab|practical|workshop)\b/g, "")
+                .replace(/[^a-z0-9]+/g, " ")
+                .trim();
+            return `NAME:${cleanName || sub.name || "subject"}`;
+        }
+
+        function computeCombinedGroups() {
+            const subs = appData?.subjects || [];
+            const groupsMap = new Map();
+
+            subs.forEach((sub, idx) => {
+                const st = getSimulatedSubjectStats(idx);
+                if (!st) return;
+                const key = getSubjectGroupKey(sub);
+                const cleanName = (sub.name || "").replace(/\s*[-–(]?\s*(lecture|theory|tutorial|tute|lab|practical).*$/i, "").trim() || sub.name;
+
+                if (!groupsMap.has(key)) {
+                    groupsMap.set(key, {
+                        key,
+                        code: sub.code || "",
+                        name: cleanName,
+                        att: 0,
+                        tot: 0,
+                        components: []
+                    });
+                }
+
+                const g = groupsMap.get(key);
+                g.att += st.att;
+                g.tot += st.tot;
+                g.components.push({
+                    tag: sub.tag || "Class",
+                    att: st.att,
+                    tot: st.tot,
+                    pct: st.pct
+                });
+            });
+
+            return Array.from(groupsMap.values())
+                .filter(g => g.components.length > 1)
+                .map(g => {
+                    const pct = g.tot > 0 ? Number(((g.att / g.tot) * 100).toFixed(1)) : 0;
+                    return { ...g, pct };
+                });
+        }
+
+        function renderCombinedAttendance() {
+            const container = document.getElementById('combinedAttendanceList');
+            if (!container) return;
+
+            const groups = computeCombinedGroups();
+            if (!groups.length) {
+                container.innerHTML = `<p class="text-xs text-slate-400">No multi-component subjects (Lecture+Tutorial or Lecture+Lab) found in your current attendance list.</p>`;
+                return;
+            }
+
+            const goalRatio = targetPercent / 100;
+            container.innerHTML = groups.map(g => {
+                const isSafe = g.pct >= targetPercent;
+                const compLabels = g.components.map(c => `${c.tag}: ${c.att}/${c.tot} (${c.pct}%)`).join(" • ");
+
+                let helperText = "";
+                if (isSafe) {
+                    const canSkip = Math.floor((g.att / goalRatio) - g.tot);
+                    helperText = canSkip > 0
+                        ? `Combined safe to skip <b class="text-emerald-400">${canSkip}</b> more`
+                        : `<span class="text-amber-300">Combined on the edge</span>`;
+                } else {
+                    const need = Math.max(0, Math.ceil((goalRatio * g.tot - g.att) / (1 - goalRatio)));
+                    helperText = `Attend next <b class="text-rose-400">${need}</b> combined`;
+                }
+
+                return `
+                    <div class="bg-slate-900/90 border ${isSafe ? 'border-slate-800' : 'border-rose-500/35'} rounded-xl p-3 space-y-2">
+                        <div class="flex justify-between items-start gap-2">
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    ${g.code ? `<span class="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300">${g.code}</span>` : ''}
+                                    <span class="text-[10px] font-semibold text-slate-400">Combined (${g.components.map(c => c.tag).join(" + ")})</span>
+                                </div>
+                                <p class="text-xs font-bold text-white mt-1">${g.name}</p>
+                            </div>
+                            <div class="text-right">
+                                <span class="text-base font-extrabold ${isSafe ? 'text-emerald-400' : 'text-rose-400'}">${g.pct.toFixed(1)}%</span>
+                                <p class="text-[10px] text-slate-300">${g.att}/${g.tot}</p>
+                            </div>
+                        </div>
+
+                        <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                            <div class="h-full rounded-full transition-all duration-300 ${isSafe ? 'bg-emerald-400' : 'bg-rose-500'}" style="width: ${Math.min(g.pct, 100)}%"></div>
+                        </div>
+
+                        <div class="flex flex-wrap justify-between items-center gap-1 text-[11px] text-slate-400">
+                            <span>${compLabels}</span>
+                            <span>${helperText}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
 
         function findMatchedSubjectIndex(slotRaw) {
             const subs = appData?.subjects || [];
@@ -342,10 +448,16 @@
                 grandTot += st.tot;
                 lines.push(`• ${st.sub.name} (${st.sub.tag}): ${st.pct}% (${st.att}/${st.tot})`);
             });
+            const combinedLines = computeCombinedGroups().map(
+                g => `• Combined ${g.name}${g.code ? ` [${g.code}]` : ''}: ${g.pct.toFixed(1)}% (${g.att}/${g.tot})`
+            );
             const overallPct = grandTot > 0 ? ((grandAtt / grandTot) * 100).toFixed(1) : "0.0";
             const summary = [
                 `📊 DCRUST Attendance (${appData.roll_no})`,
                 `Overall: ${overallPct}% (${grandAtt}/${grandTot}) • Goal: ${targetPercent}%`,
+                ...(combinedLines.length ? ["", "Combined (L+T / L+L):", ...combinedLines] : []),
+                "",
+                "By Component:",
                 ...lines
             ].join("\n");
 
@@ -658,10 +770,6 @@
             document.getElementById('modalCode').innerText = sub.code;
             document.getElementById('modalTitle').innerText = sub.name;
 
-            const cleanTopic = sub.name.replace(/for engineers/i, '').trim();
-            const searchQuery = encodeURIComponent(`DCRUST ${cleanTopic} previous year question paper`);
-            document.getElementById('pyqSearchBtn').href = `https://www.google.com/search?q=${searchQuery}`;
-
             const presentCnt = logs.filter(l => l.status === "PRESENT").length || sub.attended;
             const absentCnt = logs.filter(l => l.status === "ABSENT").length || Math.max(sub.total - sub.attended, 0);
             const leaveCnt = logs.filter(l => l.status === "LEAVE").length || (sub.leaves || 0);
@@ -752,6 +860,8 @@
             document.getElementById('studentRoll').innerText = `Roll: ${appData.roll_no}`;
             document.getElementById('lastUpdated').innerText = `Synced at ${appData.timestamp || 'Just now'}`;
 
+            renderCombinedAttendance();
+
             let grandAtt = 0, grandTot = 0;
             const list = document.getElementById('subjectsList');
             list.innerHTML = "";
@@ -799,7 +909,7 @@
                             </div>
                             <div class="text-right">
                                 <span class="text-xl font-extrabold ${isSafe ? 'text-emerald-400' : 'text-rose-400'}">${pctDisplay}%</span>
-                                <p class="text-[10px] text-indigo-300 mt-0.5">Dates & PYQs ›</p>
+                                <p class="text-[10px] text-indigo-300 mt-0.5">Attendance Dates ›</p>
                             </div>
                         </div>
 

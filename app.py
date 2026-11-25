@@ -1,349 +1,409 @@
-from flask import Flask, render_template, request, jsonify
-import requests
-from bs4 import BeautifulSoup
-from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone, timedelta
 import base64
-import uuid
+import os
 import re
-import math
+import time
+import uuid
+from urllib.parse import urljoin
+
+from bs4 import BeautifulSoup
+from flask import Flask, jsonify, render_template, request
+import requests
 
 app = Flask(__name__)
-sessions = {}
 
-BASE_URL = "https://dcrustm.samarth.edu.in"
-LOGIN_URL = f"{BASE_URL}/index.php/site/login"
-ATTENDANCE_URL = f"{BASE_URL}/index.php/student-attendance/attendance/index"
-TIMETABLE_PAGE_URL = f"{BASE_URL}/index.php/student-attendance/attendance/view-time-table"
-CLASSES_API_URL = f"{BASE_URL}/index.php/student-attendance/attendance-api/get-classes-of-student"
+SAMARTH_BASE_URL = "https://dcrust.samarth.edu.in"
+SAMARTH_LOGIN_URL = f"{SAMARTH_BASE_URL}/index.php/site/login"
 
-IST = timezone(timedelta(hours=5, minutes=30))
-
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+DEFAULT_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
 }
 
-API_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Accept": "application/json, text/javascript, */*; q=0.01",
-    "X-Requested-With": "XMLHttpRequest",
-    "Referer": TIMETABLE_PAGE_URL
-}
+# In-memory session store: { session_id: { "session": requests.Session(), "csrf_name": str, "csrf_token": str, "created_at": float } }
+SESSIONS = {}
+SESSION_TTL_SECONDS = 1800  # 30 minutes
 
-@app.route('/')
-def home():
-    return render_template('index.html')
 
-@app.route('/init-login', methods=['GET'])
-def init_login():
-    try:
-        session = requests.Session()
-        res = session.get(LOGIN_URL, headers=HEADERS, timeout=15)
-        soup = BeautifulSoup(res.text, 'html.parser')
+def cleanup_expired_sessions():
+    """Removes expired login sessions from memory."""
+    now = time.time()
+    expired_ids = [
+        sid for sid, meta in SESSIONS.items()
+        if now - meta.get("created_at", 0) > SESSION_TTL_SECONDS
+    ]
+    for sid in expired_ids:
+        SESSIONS.pop(sid, None)
 
-        csrf_input = soup.find('input', {'name': '_csrf'})
-        csrf_token = csrf_input['value'] if csrf_input else ""
 
-        captcha_img = soup.find('img', {'id': 'loginform-verifycode-image'})
-        captcha_base64 = None
+def extract_csrf_and_captcha(soup, sess):
+    """Extracts hidden CSRF token and base64 CAPTCHA image from the Samarth login page."""
+    csrf_name = "_csrf"
+    csrf_token = ""
 
-        if captcha_img and captcha_img.get('src'):
-            img_url = BASE_URL + captcha_img['src']
-            img_res = session.get(img_url, headers=HEADERS, timeout=15)
-            captcha_base64 = base64.b64encode(img_res.content).decode('utf-8')
+    csrf_input = soup.find("input", {"name": re.compile(r"csrf", re.I)})
+    if csrf_input:
+        csrf_name = csrf_input.get("name") or "_csrf"
+        csrf_token = csrf_input.get("value") or ""
 
-        session_id = str(uuid.uuid4())
-        sessions[session_id] = {"session": session, "csrf": csrf_token}
+    captcha_b64 = None
+    captcha_img = (
+        soup.find("img", {"id": re.compile(r"captcha", re.I)})
+        or soup.find("img", {"src": re.compile(r"captcha", re.I)})
+    )
+    if captcha_img and captcha_img.get("src"):
+        captcha_url = urljoin(SAMARTH_LOGIN_URL, captcha_img["src"].strip())
+        try:
+            cap_res = sess.get(captcha_url, headers=DEFAULT_HEADERS, timeout=12)
+            if cap_res.ok and cap_res.content:
+                captcha_b64 = base64.b64encode(cap_res.content).decode("utf-8")
+        except Exception:
+            captcha_b64 = None
 
-        return jsonify({"status": "success", "session_id": session_id, "captcha": captcha_base64})
-    except Exception as e:
-        return jsonify({"status": "error", "message": f"DCRUST server unreachable: {str(e)}"})
+    return csrf_name, csrf_token, captcha_b64
 
-def parse_date_rows(soup, subject_name, tag):
-    """Flexibly extracts [Date, Time, Status] rows regardless of column order or date format."""
-    logs = []
-    date_pattern = re.compile(r'(\d{4}[-/]\d{2}[-/]\d{2}|\d{2}[-/]\d{2}[-/]\d{4}|\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})')
-    status_keywords = {"PRESENT", "ABSENT", "LEAVE", "LATE", "MEDICAL"}
 
-    for table in soup.find_all('table'):
-        for row in table.find_all('tr'):
-            cols = [c.get_text(" ", strip=True) for c in row.find_all('td')]
+def normalize_status(raw_status):
+    """Maps raw attendance cell labels to PRESENT, ABSENT, or LEAVE."""
+    val = (raw_status or "").strip().upper()
+    if val in ("P", "PRESENT", "1", "Y", "YES", "A/P"):
+        return "PRESENT"
+    if val in ("A", "ABSENT", "0", "N", "NO"):
+        return "ABSENT"
+    if val in ("L", "LEAVE", "OD", "ON DUTY", "MEDICAL"):
+        return "LEAVE"
+    return "PRESENT" if "PRESENT" in val else ("ABSENT" if "ABSENT" in val else "LEAVE")
+
+
+def classify_subject_tag(title, code=""):
+    """Identifies whether a subject entry is Theory, Lab, or Tutorial."""
+    combined = f"{title} {code}".lower()
+    if any(k in combined for k in ("lab", "practical", "workshop")):
+        return "Lab"
+    if any(k in combined for k in ("tute", "tutorial")):
+        return "Tutorial"
+    return "Theory"
+
+
+def extract_subject_code(text):
+    """Extracts an alphanumeric course code such as BSMAT103D or ESCS101D."""
+    match = re.search(r"\b([A-Z]{2,6}\d{2,4}[A-Z0-9]*)\b", (text or "").upper())
+    return match.group(1) if match else ""
+
+
+def parse_attendance_logs(soup):
+    """Extracts date-wise attendance logs grouped by subject code/title if available."""
+    logs_by_key = {}
+
+    for table in soup.find_all("table"):
+        headers = [th.get_text(" ", strip=True).lower() for th in table.find_all("th")]
+        rows = table.find_all("tr")
+        if len(rows) < 2:
+            continue
+
+        has_date_col = any("date" in h for h in headers)
+        has_status_col = any(k in h for h in headers for k in ("status", "att", "present", "remark"))
+
+        if has_date_col or has_status_col:
+            for row in rows[1:]:
+                cols = [td.get_text(" ", strip=True) for td in row.find_all("td")]
+                if len(cols) < 2:
+                    continue
+
+                date_val = ""
+                time_val = "Scheduled Slot"
+                status_val = ""
+                sub_key = ""
+
+                for cell in cols:
+                    if not date_val and re.search(r"\b(\d{1,2}[-/]\d{1,2}[-/]\d{2,4}|\d{4}[-/]\d{1,2}[-/]\d{1,2})\b", cell):
+                        date_val = cell
+                    elif re.search(r"\b\d{1,2}:\d{2}\b", cell):
+                        time_val = cell
+                    elif cell.strip().upper() in ("P", "A", "L", "PRESENT", "ABSENT", "LEAVE", "OD", "ON DUTY"):
+                        status_val = normalize_status(cell)
+                    elif not sub_key and len(cell) > 3:
+                        code = extract_subject_code(cell)
+                        sub_key = code if code else cell.strip().lower()
+
+                if date_val and status_val:
+                    entry = {
+                        "date": date_val,
+                        "time": time_val,
+                        "status": status_val,
+                    }
+                    target_key = sub_key or "__GENERAL__"
+                    logs_by_key.setdefault(target_key, []).append(entry)
+
+    return logs_by_key
+
+
+def parse_timetable(soup):
+    """Extracts weekly Monday–Saturday class schedule if present on the page."""
+    timetable = {
+        "Monday": [],
+        "Tuesday": [],
+        "Wednesday": [],
+        "Thursday": [],
+        "Friday": [],
+        "Saturday": [],
+    }
+    days_re = re.compile(r"\b(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday)\b", re.I)
+
+    for table in soup.find_all("table"):
+        table_text = table.get_text(" ", strip=True)
+        if not days_re.search(table_text):
+            continue
+
+        header_cells = [c.get_text(" ", strip=True) for c in table.find_all("th")]
+        for row in table.find_all("tr"):
+            cells = [c.get_text(" ", strip=True) for c in row.find_all("td")]
+            if len(cells) < 2:
+                continue
+
+            day_match = days_re.search(cells[0])
+            if day_match:
+                day_name = day_match.group(1).capitalize()
+                for idx, slot_text in enumerate(cells[1:], start=1):
+                    cleaned = " ".join(slot_text.split())
+                    if cleaned and cleaned.lower() not in ("-", "--", "free", "break", "lunch", "off"):
+                        slot_time = (
+                            header_cells[idx]
+                            if idx < len(header_cells) and header_cells[idx]
+                            else f"Slot {idx}"
+                        )
+                        timetable[day_name].append({
+                            "time": slot_time,
+                            "raw": cleaned,
+                        })
+
+    return timetable
+
+
+def parse_attendance_payload(html_text, roll_no):
+    """Parses subjects, attendance counts, date logs, and timetable from Samarth HTML."""
+    soup = BeautifulSoup(html_text, "html.parser")
+    logs_by_key = parse_attendance_logs(soup)
+    timetable = parse_timetable(soup)
+    subjects = []
+
+    for table in soup.find_all("table"):
+        rows = table.find_all("tr")
+        for row in rows[1:]:
+            cols = [c.get_text(" ", strip=True) for c in row.find_all(["td", "th"])]
             if len(cols) < 3:
                 continue
 
-            found_date = None
-            found_status = None
-            found_time = ""
+            # Skip pure timetable rows
+            if re.match(r"^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday)$", cols[0].strip(), re.I):
+                continue
 
-            for col in cols:
-                upper_col = col.upper().strip()
-                if upper_col in status_keywords:
-                    found_status = upper_col
-                elif date_pattern.search(col) and not found_date:
-                    found_date = date_pattern.search(col).group(1)
-                elif (":" in col or "AM" in upper_col or "PM" in upper_col) and not found_time:
-                    found_time = col
+            subject_cell = cols[0]
+            code_cell = cols[1] if len(cols) > 1 else ""
+            code = extract_subject_code(f"{code_cell} {subject_cell}")
 
-            if found_date and found_status:
-                logs.append({
-                    "date": found_date,
-                    "time": found_time or "Scheduled Slot",
-                    "status": found_status,
-                    "subject": subject_name,
-                    "tag": tag
-                })
-    return logs
+            name_parts = [subject_cell]
+            if code and code not in subject_cell.upper():
+                name_parts.append(f"({code})")
+            full_name = " ".join(p for p in name_parts if p).strip()
 
-def fetch_single_subject(session, row_data):
-    """Fetches summary + all paginated date logs for one subject."""
-    try:
-        detail_res = session.get(row_data["url"], headers=HEADERS, timeout=15)
-        soup = BeautifulSoup(detail_res.text, 'html.parser')
-        detail_text = soup.get_text(" ", strip=True)
+            tag = classify_subject_tag(full_name, code)
+            attended = 0
+            total = 0
+            leaves = 0
 
-        total_match = re.search(r'Total Classes Taken:\s*(\d+)', detail_text)
-        present_match = re.search(r'Present Count:\s*(\d+)', detail_text)
-        leave_match = re.search(r'Leave Count:\s*(\d+)', detail_text)
-        percent_match = re.search(r'Present Percentage:\s*([\d.]+)%', detail_text)
-
-        if total_match and present_match:
-            total_taken = int(total_match.group(1))
-            present_count = int(present_match.group(1))
-            leave_count = int(leave_match.group(1)) if leave_match else 0
-            effective_total = max(total_taken - leave_count, 1)
-            exact_percent = float(percent_match.group(1)) if percent_match else round((present_count / effective_total) * 100, 2)
-
-            all_logs = parse_date_rows(soup, row_data["name"], row_data["tag"])
-
-            total_pages = math.ceil(total_taken / 20)
-            for page_num in range(2, total_pages + 1):
-                sep = "&" if "?" in row_data["url"] else "?"
-                page_url = f"{row_data['url']}{sep}page={page_num}"
-                p_res = session.get(page_url, headers=HEADERS, timeout=15)
-                p_soup = BeautifulSoup(p_res.text, 'html.parser')
-                all_logs.extend(parse_date_rows(p_soup, row_data["name"], row_data["tag"]))
-
-            return {
-                "code": row_data["code"],
-                "name": row_data["name"],
-                "tag": row_data["tag"],
-                "attended": present_count,
-                "total": effective_total,
-                "leaves": leave_count,
-                "percentage": exact_percent,
-                "logs": all_logs
-            }
-    except Exception:
-        return None
-    return None
-
-def extract_student_token(html_text):
-    """Extracts student_id token from HTML/JS."""
-    if not html_text:
-        return None
-    patterns = [
-        r'get-classes-of-student[^"\'\s<>]*student_id(?:=|%3D)([A-Za-z0-9_-]{16,})',
-        r'student[_-]?id["\']?\s*[:=]\s*["\']([A-Za-z0-9_-]{16,})["\']',
-        r'data-student-id=["\']([A-Za-z0-9_-]{16,})["\']',
-        r'\b([a-f0-9]{40,80})\b',
-    ]
-    for pat in patterns:
-        m = re.search(pat, html_text, re.I)
-        if m:
-            return m.group(1)
-    return None
-
-def parse_dt(val):
-    """Parses Unix timestamps (int/float/numeric str) or ISO/date strings into IST datetime."""
-    if val is None or val == "":
-        return None
-    if isinstance(val, (int, float)):
-        ts = val / 1000.0 if val > 1e11 else float(val)
-        return datetime.fromtimestamp(ts, tz=IST)
-    if isinstance(val, str):
-        s = val.strip()
-        if re.fullmatch(r'\d{10,13}', s):
-            ts = int(s) / 1000.0 if len(s) > 11 else float(s)
-            return datetime.fromtimestamp(ts, tz=IST)
-        cleaned = s.replace("Z", "+00:00")
-        try:
-            dt = datetime.fromisoformat(cleaned)
-            return dt.astimezone(IST) if dt.tzinfo else dt.replace(tzinfo=IST)
-        except Exception:
-            for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%d-%m-%Y %H:%M:%S", "%d-%m-%Y %H:%M", "%Y-%m-%d"):
-                try:
-                    return datetime.strptime(cleaned[:19], fmt).replace(tzinfo=IST)
-                except Exception:
-                    continue
-    return None
-
-def fetch_timetable(session, att_html="", login_html=""):
-    """Fetches and builds a weekly schedule (Mon-Sat) from get-classes-of-student JSON."""
-    days_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
-    schedule = {d: [] for d in days_order}
-
-    try:
-        tt_res = session.get(TIMETABLE_PAGE_URL, headers=HEADERS, timeout=12)
-        combined_html = (tt_res.text or "") + "\n" + (att_html or "") + "\n" + (login_html or "")
-        student_token = extract_student_token(combined_html)
-
-        if not student_token:
-            return schedule
-
-        api_res = session.get(
-            CLASSES_API_URL,
-            params={"student_id": student_token},
-            headers=API_HEADERS,
-            timeout=15
-        )
-        if api_res.status_code != 200:
-            return schedule
-
-        data = api_res.json()
-        payload_items = []
-        if isinstance(data, list):
-            payload_items = data
-        elif isinstance(data, dict):
-            for key in ("data", "classes", "events", "timetable", "records", "result"):
-                if isinstance(data.get(key), list):
-                    payload_items = data[key]
+            for cell in cols[1:]:
+                frac_match = re.search(r"(\d+)\s*/\s*(\d+)", cell)
+                if frac_match:
+                    attended = int(frac_match.group(1))
+                    total = int(frac_match.group(2))
                     break
 
-        seen = {d: set() for d in days_order}
+            if total == 0:
+                nums = [int(n) for n in re.findall(r"\b\d+\b", " ".join(cols[1:]))]
+                if len(nums) >= 2:
+                    attended = nums[0]
+                    total = max(nums[1], nums[0])
 
-        for item in payload_items:
-            if not isinstance(item, dict):
-                continue
+            for cell in cols[1:]:
+                leave_match = re.search(r"leave[:\s-]*(\d+)", cell, re.I)
+                if leave_match:
+                    leaves = int(leave_match.group(1))
+                    break
 
-            start_dt = parse_dt(item.get("start") or item.get("start_time") or item.get("date"))
-            end_dt = parse_dt(item.get("end") or item.get("end_time"))
-
-            if not start_dt:
-                continue
-
-            day_name = start_dt.strftime("%A")
-            if day_name not in schedule:
-                continue
-
-            if end_dt:
-                time_label = f"{start_dt.strftime('%I:%M %p')} - {end_dt.strftime('%I:%M %p')}"
-            else:
-                time_label = start_dt.strftime("%I:%M %p")
-
-            slot_title = str(item.get("title") or "").strip()
-            desc = str(item.get("desc") or item.get("description") or "").strip()
-
-            if ":" in desc:
-                code_part, sub_part = [p.strip() for p in desc.split(":", 1)]
-                sub_title = f"{sub_part.title()} ({code_part})"
-            elif desc:
-                sub_title = desc.title()
-            else:
-                sub_title = ""
-
-            if sub_title and slot_title:
-                raw_label = f"{sub_title} • {slot_title}"
-            else:
-                raw_label = sub_title or slot_title
-
-            if not raw_label:
-                continue
-
-            dedup_key = f"{time_label}|{raw_label}"
-            if dedup_key not in seen[day_name]:
-                seen[day_name].add(dedup_key)
-                schedule[day_name].append({
-                    "time": time_label,
-                    "raw": raw_label,
-                    "_sort": start_dt.strftime("%H:%M")
+            if full_name and total > 0:
+                matched_logs = (
+                    logs_by_key.get(code)
+                    or logs_by_key.get(full_name.lower())
+                    or []
+                )
+                subjects.append({
+                    "code": code,
+                    "name": full_name,
+                    "tag": tag,
+                    "attended": attended,
+                    "total": total,
+                    "leaves": leaves,
+                    "logs": matched_logs,
                 })
 
-        for d in days_order:
-            schedule[d].sort(key=lambda x: x.get("_sort", ""))
-            for entry in schedule[d]:
-                entry.pop("_sort", None)
-
-    except Exception:
-        pass
-
-    return schedule
-
-@app.route('/get-attendance', methods=['POST'])
-def get_attendance():
-    data = request.json or {}
-    session_id = data.get('session_id')
-    username = data.get('username')
-    password = data.get('password')
-    captcha = data.get('captcha', '')
-
-    if session_id not in sessions:
-        return jsonify({"status": "error", "message": "Session expired. Refreshing..."})
-
-    user_data = sessions.pop(session_id)
-    session = user_data["session"]
-    csrf_token = user_data["csrf"]
-
-    payload = {
-        "_csrf": csrf_token,
-        "LoginForm[username]": username,
-        "LoginForm[password]": password,
-        "LoginForm[verifyCode]": captcha
+    return {
+        "status": "success",
+        "roll_no": roll_no,
+        "subjects": subjects,
+        "timetable": timetable,
     }
 
+
+@app.route("/")
+def index():
+    return render_template("index.html")
+
+
+@app.route("/health", methods=["GET"])
+def health():
+    cleanup_expired_sessions()
+    return jsonify({
+        "status": "ok",
+        "active_sessions": len(SESSIONS),
+    })
+
+
+@app.route("/init-login", methods=["GET"])
+def init_login():
+    cleanup_expired_sessions()
+    session_id = str(uuid.uuid4())
+    sess = requests.Session()
+    sess.headers.update(DEFAULT_HEADERS)
+
     try:
-        login_res = session.post(LOGIN_URL, data=payload, headers=HEADERS, timeout=15)
-        if "site/login" in login_res.url and "Logout" not in login_res.text:
-            return jsonify({"status": "error", "message": "Invalid Roll No, Password, or CAPTCHA."})
+        res = sess.get(SAMARTH_LOGIN_URL, timeout=15)
+        res.raise_for_status()
+        soup = BeautifulSoup(res.text, "html.parser")
+        csrf_name, csrf_token, captcha_b64 = extract_csrf_and_captcha(soup, sess)
 
-        att_res = session.get(ATTENDANCE_URL, headers=HEADERS, timeout=15)
-        soup = BeautifulSoup(att_res.text, 'html.parser')
-
-        tasks = []
-        table = soup.find('table')
-        if table:
-            for row in table.find_all('tr')[1:]:
-                cols = row.find_all('td')
-                if len(cols) >= 6:
-                    class_type = cols[1].get_text(strip=True)
-                    course_full = cols[2].get_text(strip=True)
-
-                    code = course_full.split(":")[0].strip() if ":" in course_full else ""
-                    clean_name = course_full.split(":")[-1].strip().title() if ":" in course_full else course_full
-                    tag = "Lab" if "Lab" in class_type else ("Tute" if "Tute" in class_type else "Theory")
-
-                    view_link = cols[-1].find('a')
-                    if view_link and view_link.get('href'):
-                        href = view_link['href']
-                        detail_url = href if href.startswith("http") else BASE_URL + href
-                        tasks.append({"code": code, "name": clean_name, "tag": tag, "url": detail_url})
-
-        with ThreadPoolExecutor(max_workers=6) as executor:
-            results = list(executor.map(lambda t: fetch_single_subject(session, t), tasks))
-
-        subjects = [r for r in results if r is not None]
-        if not subjects:
-            return jsonify({"status": "error", "message": "Could not parse attendance records."})
-
-        timetable = fetch_timetable(session, att_res.text, login_res.text)
-
-        total_attended = sum(s["attended"] for s in subjects)
-        total_classes = sum(s["total"] for s in subjects)
-        overall_percent = round((total_attended / max(total_classes, 1)) * 100, 2)
-
+        SESSIONS[session_id] = {
+            "session": sess,
+            "csrf_name": csrf_name,
+            "csrf_token": csrf_token,
+            "created_at": time.time(),
+        }
         return jsonify({
             "status": "success",
-            "roll_no": username,
-            "overall": {
-                "attended": total_attended,
-                "total": total_classes,
-                "percentage": overall_percent
-            },
-            "subjects": subjects,
-            "timetable": timetable
+            "session_id": session_id,
+            "captcha": captcha_b64,
+        })
+    except Exception as exc:
+        SESSIONS[session_id] = {
+            "session": sess,
+            "csrf_name": "_csrf",
+            "csrf_token": "",
+            "created_at": time.time(),
+        }
+        return jsonify({
+            "status": "success",
+            "session_id": session_id,
+            "captcha": None,
+            "warning": f"Login session initialized with fallback: {exc}",
         })
 
-    except Exception as e:
-        return jsonify({"status": "error", "message": f"Server error: {str(e)}"})
 
-if __name__ == '__main__':
-    app.run(debug=True)
+@app.route("/get-attendance", methods=["POST"])
+def get_attendance():
+    cleanup_expired_sessions()
+    payload = request.get_json(silent=True) or {}
+    session_id = (payload.get("session_id") or "").strip()
+    username = (payload.get("username") or "").strip()
+    password = payload.get("password") or ""
+    captcha = (payload.get("captcha") or "").strip()
+
+    if not username or not password:
+        return jsonify({
+            "status": "error",
+            "message": "Roll number and password are required.",
+        })
+
+    session_entry = SESSIONS.get(session_id)
+    if session_entry:
+        sess = session_entry["session"]
+    else:
+        sess = requests.Session()
+        sess.headers.update(DEFAULT_HEADERS)
+
+    try:
+        login_page_res = sess.get(SAMARTH_LOGIN_URL, timeout=15)
+        login_page_res.raise_for_status()
+        login_soup = BeautifulSoup(login_page_res.text, "html.parser")
+        csrf_name, csrf_token, _ = extract_csrf_and_captcha(login_soup, sess)
+
+        form_data = {
+            "LoginForm[username]": username,
+            "LoginForm[password]": password,
+        }
+        if csrf_token:
+            form_data[csrf_name] = csrf_token
+        if captcha:
+            form_data["LoginForm[verifyCode]"] = captcha
+
+        for hidden_inp in login_soup.find_all("input", {"type": "hidden"}):
+            inp_name = hidden_inp.get("name")
+            if inp_name and inp_name not in form_data:
+                form_data[inp_name] = hidden_inp.get("value") or ""
+
+        login_post_res = sess.post(
+            SAMARTH_LOGIN_URL,
+            data=form_data,
+            timeout=20,
+            allow_redirects=True,
+        )
+        login_post_res.raise_for_status()
+
+        body_lower = login_post_res.text.lower()
+        if "loginform[password]" in body_lower or "incorrect username or password" in body_lower:
+            return jsonify({
+                "status": "error",
+                "message": "Invalid credentials or captcha. Please verify and try again.",
+            })
+
+        combined_html = login_post_res.text
+        dashboard_soup = BeautifulSoup(login_post_res.text, "html.parser")
+
+        for link in dashboard_soup.find_all("a", href=True):
+            href_lower = link["href"].lower()
+            if any(k in href_lower for k in ("attendance", "timetable", "routine", "schedule")):
+                sub_url = urljoin(login_post_res.url, link["href"])
+                try:
+                    sub_res = sess.get(sub_url, timeout=15)
+                    if sub_res.ok and sub_res.text:
+                        combined_html += "\n" + sub_res.text
+                except Exception:
+                    continue
+
+        result = parse_attendance_payload(combined_html, username)
+        if not result["subjects"]:
+            return jsonify({
+                "status": "error",
+                "message": "Logged in, but no attendance rows were found on the portal.",
+            })
+
+        return jsonify(result)
+
+    except requests.Timeout:
+        return jsonify({
+            "status": "error",
+            "message": "DCRUST portal timed out. Please try again.",
+        })
+    except Exception as exc:
+        return jsonify({
+            "status": "error",
+            "message": f"Failed to fetch attendance: {exc}",
+        })
+
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=False)
