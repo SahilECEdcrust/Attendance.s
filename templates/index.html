@@ -61,6 +61,10 @@
             box-shadow: 0 16px 36px -12px rgba(15, 23, 42, 0.28);
         }
 
+        body.dark-theme .interactive-card:hover {
+            box-shadow: 0 18px 38px -12px rgba(0, 0, 0, 0.68);
+        }
+
         body.dark-theme .text-slate-900 { color: #f8fafc !important; }
         body.dark-theme .text-slate-700 { color: #cbd5e1 !important; }
         body.dark-theme .text-slate-600 { color: #94a3b8 !important; }
@@ -405,13 +409,23 @@
 
     <!-- GRAPHICAL ATTENDANCE SHARE CARD MODAL -->
     <div id="shareCardModal" class="fixed inset-0 z-50 hidden bg-slate-950/65 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4" onclick="closeShareModalOnBackdrop(event)">
-        <div class="surface-card w-full max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
-            <div class="p-4 sm:p-5 border-b border-slate-200/70 flex justify-between items-center gap-2">
+        <div class="surface-card w-full max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
+            <div class="p-4 border-b border-slate-200/70 flex justify-between items-center gap-2">
                 <div>
                     <h3 class="text-base font-extrabold text-slate-900">🎨 Colorful Attendance Card</h3>
-                    <p class="text-[11px] text-slate-500">Overall + Subject attendance in a shareable image</p>
+                    <p class="text-[11px] text-slate-500">Choose card style &amp; share on WhatsApp / Insta</p>
                 </div>
                 <button onclick="closeShareCardModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center text-sm">✕</button>
+            </div>
+
+            <!-- Card Theme Switcher -->
+            <div class="px-4 py-2.5 bg-slate-50 border-b border-slate-200/70 flex items-center justify-between gap-2">
+                <span class="text-[11px] font-semibold text-slate-600">Card Style:</span>
+                <div class="flex gap-1.5">
+                    <button onclick="setShareCardTheme('royal')" id="scThemeRoyal" class="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-indigo-600 text-white transition">🌌 Royal</button>
+                    <button onclick="setShareCardTheme('sakura')" id="scThemeSakura" class="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-white text-slate-700 border border-slate-200 transition">🌸 Sakura</button>
+                    <button onclick="setShareCardTheme('india')" id="scThemeIndia" class="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-white text-slate-700 border border-slate-200 transition">🇮🇳 India</button>
+                </div>
             </div>
 
             <div class="p-4 overflow-y-auto flex-1 bg-slate-900/95 flex items-center justify-center">
@@ -482,6 +496,7 @@
         let modalLogFilter = "ALL";
         let selectedDay = "Monday";
         let bgMode = "anime";
+        let shareCardTheme = "royal";
         let isDarkMode = false;
         let hideRollNumber = false;
         let particles = [];
@@ -664,78 +679,133 @@
             ctx.closePath();
         }
 
+        function setShareCardTheme(theme) {
+            shareCardTheme = theme;
+            const activeCls = "text-[11px] font-bold px-2.5 py-1 rounded-lg bg-indigo-600 text-white transition";
+            const idleCls = "text-[11px] font-bold px-2.5 py-1 rounded-lg bg-white text-slate-700 border border-slate-200 transition";
+            document.getElementById('scThemeRoyal').className = theme === 'royal' ? activeCls : idleCls;
+            document.getElementById('scThemeSakura').className = theme === 'sakura' ? activeCls : idleCls;
+            document.getElementById('scThemeIndia').className = theme === 'india' ? activeCls : idleCls;
+            drawShareCardCanvas();
+        }
+
         function drawShareCardCanvas() {
             if (!appData) return;
             const canvas = document.getElementById('shareCardCanvas');
             if (!canvas) return;
 
             const subs = (appData.subjects || []).map((_, idx) => getSimulatedSubjectStats(idx)).filter(Boolean);
+            const combined = computeCombinedGroups();
             const grandAtt = subs.reduce((acc, s) => acc + s.att, 0);
             const grandTot = subs.reduce((acc, s) => acc + s.tot, 0);
             const overallPct = grandTot > 0 ? ((grandAtt / grandTot) * 100).toFixed(1) : "0.0";
+            const anySim = Object.keys(simState).length > 0;
+            const goalRatio = targetPercent / 100;
 
-            const rowHeight = 76;
-            const headerHeight = 290;
+            const themes = {
+                royal: { stops: ["#0f172a", "#312e81", "#831843"], accent: "#fde68a", glow: "rgba(129, 140, 248, 0.35)" },
+                sakura: { stops: ["#1e1b4b", "#831843", "#be185d"], accent: "#fbcfe8", glow: "rgba(244, 114, 182, 0.38)" },
+                india: { stops: ["#042f2e", "#115e59", "#9a3412"], accent: "#fde047", glow: "rgba(251, 146, 60, 0.35)" },
+            };
+            const activeTheme = themes[shareCardTheme] || themes.royal;
+
+            const rowHeight = 82;
+            const combinedBlockHeight = combined.length ? (56 + combined.length * 46) : 0;
+            const headerHeight = 295;
             const footerHeight = 76;
             const width = 900;
-            const height = headerHeight + Math.max(subs.length, 1) * rowHeight + footerHeight;
+            const height = headerHeight + combinedBlockHeight + Math.max(subs.length, 1) * rowHeight + footerHeight;
 
             canvas.width = width;
             canvas.height = height;
             const ctx = canvas.getContext('2d');
 
             const bgGrad = ctx.createLinearGradient(0, 0, width, height);
-            bgGrad.addColorStop(0, "#1e1b4b");
-            bgGrad.addColorStop(0.5, "#4c1d95");
-            bgGrad.addColorStop(1, "#9d174d");
+            bgGrad.addColorStop(0, activeTheme.stops[0]);
+            bgGrad.addColorStop(0.52, activeTheme.stops[1]);
+            bgGrad.addColorStop(1, activeTheme.stops[2]);
             ctx.fillStyle = bgGrad;
             ctx.fillRect(0, 0, width, height);
 
-            const glow1 = ctx.createRadialGradient(740, 110, 20, 740, 110, 250);
-            glow1.addColorStop(0, "rgba(251, 191, 36, 0.35)");
-            glow1.addColorStop(1, "rgba(251, 191, 36, 0)");
+            const glow1 = ctx.createRadialGradient(740, 110, 20, 740, 110, 260);
+            glow1.addColorStop(0, activeTheme.glow);
+            glow1.addColorStop(1, "rgba(0,0,0,0)");
             ctx.fillStyle = glow1;
             ctx.fillRect(0, 0, width, 420);
 
             ctx.fillStyle = "rgba(255, 255, 255, 0.14)";
-            roundRectPath(ctx, 44, 38, 250, 42, 21);
+            roundRectPath(ctx, 44, 38, anySim ? 365 : 265, 42, 21);
             ctx.fill();
 
-            ctx.fillStyle = "#fde68a";
-            ctx.font = "800 18px Inter, sans-serif";
-            ctx.fillText("DCRUSTTRACK • SAMARTH", 64, 65);
+            ctx.fillStyle = activeTheme.accent;
+            ctx.font = "800 17px Inter, sans-serif";
+            ctx.fillText(anySim ? "DCRUSTTRACK • SIMULATED" : "DCRUSTTRACK • SAMARTH", 64, 65);
 
             ctx.fillStyle = "#e2e8f0";
             ctx.font = "600 17px Inter, sans-serif";
             ctx.textAlign = "right";
-            ctx.fillText(`Goal: ${targetPercent}%`, width - 48, 65);
+            ctx.fillText(`Goal: ${targetPercent}%  •  ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`, width - 48, 65);
             ctx.textAlign = "left";
 
-            roundRectPath(ctx, 44, 98, width - 88, 164, 26);
-            ctx.fillStyle = "rgba(15, 23, 42, 0.52)";
+            roundRectPath(ctx, 44, 98, width - 88, 168, 26);
+            ctx.fillStyle = "rgba(15, 23, 42, 0.55)";
             ctx.fill();
-            ctx.strokeStyle = "rgba(255, 255, 255, 0.18)";
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
             ctx.lineWidth = 2;
             ctx.stroke();
 
             ctx.fillStyle = "#f8fafc";
-            ctx.font = "800 32px Inter, sans-serif";
+            ctx.font = "800 30px Inter, sans-serif";
             ctx.fillText(formatDisplayedRoll(appData.roll_no), 74, 152);
 
             ctx.fillStyle = "#cbd5e1";
-            ctx.font = "500 20px Inter, sans-serif";
-            ctx.fillText(`Overall Attended: ${grandAtt} / ${grandTot} classes`, 74, 192);
+            ctx.font = "500 19px Inter, sans-serif";
+            ctx.fillText(`Overall Attended: ${grandAtt} / ${grandTot} classes`, 74, 190);
+
+            const safeSubsCount = subs.filter(s => s.pct >= targetPercent).length;
+            ctx.fillStyle = "#94a3b8";
+            ctx.font = "600 16px Inter, sans-serif";
+            ctx.fillText(`Safe Subjects: ${safeSubsCount} of ${subs.length}`, 74, 224);
 
             const isOverallSafe = Number(overallPct) >= targetPercent;
             ctx.textAlign = "right";
             ctx.fillStyle = isOverallSafe ? "#34d399" : "#fb7185";
-            ctx.font = "800 54px Inter, sans-serif";
-            ctx.fillText(`${overallPct}%`, width - 74, 178);
+            ctx.font = "800 56px Inter, sans-serif";
+            ctx.fillText(`${overallPct}%`, width - 74, 180);
 
             ctx.fillStyle = isOverallSafe ? "#a7f3d0" : "#fecdd3";
-            ctx.font = "700 15px Inter, sans-serif";
-            ctx.fillText(isOverallSafe ? "SAFE ZONE" : "NEEDS CLASSES", width - 74, 212);
+            ctx.font = "800 15px Inter, sans-serif";
+            ctx.fillText(isOverallSafe ? "✓ ABOVE TARGET" : "⚠ BELOW TARGET", width - 74, 214);
             ctx.textAlign = "left";
+
+            let cursorY = headerHeight;
+
+            if (combined.length) {
+                roundRectPath(ctx, 44, cursorY, width - 88, combinedBlockHeight - 16, 20);
+                ctx.fillStyle = "rgba(15, 23, 42, 0.44)";
+                ctx.fill();
+
+                ctx.fillStyle = activeTheme.accent;
+                ctx.font = "800 15px Inter, sans-serif";
+                ctx.fillText("COMBINED ATTENDANCE (L+T / L+L)", 66, cursorY + 30);
+
+                combined.forEach((g, i) => {
+                    const rowY = cursorY + 60 + i * 44;
+                    const gSafe = g.pct >= targetPercent;
+                    ctx.fillStyle = "#f1f5f9";
+                    ctx.font = "700 18px Inter, sans-serif";
+                    const gTitle = g.name.length > 34 ? g.name.slice(0, 33) + "…" : g.name;
+                    ctx.fillText(`${gTitle} (${g.att}/${g.tot})`, 66, rowY);
+
+                    ctx.textAlign = "right";
+                    ctx.fillStyle = gSafe ? "#4ade80" : "#fb7185";
+                    ctx.font = "800 20px Inter, sans-serif";
+                    ctx.fillText(`${g.pct.toFixed(1)}%`, width - 68, rowY);
+                    ctx.textAlign = "left";
+                });
+
+                cursorY += combinedBlockHeight;
+            }
 
             const palette = [
                 { badgeBg: "rgba(56, 189, 248, 0.22)", badgeText: "#7dd3fc", bar: "#38bdf8" },
@@ -745,12 +815,12 @@
             ];
 
             subs.forEach((st, idx) => {
-                const y = headerHeight + idx * rowHeight;
+                const y = cursorY + idx * rowHeight;
                 const safe = st.pct >= targetPercent;
                 const tone = palette[idx % palette.length];
 
                 roundRectPath(ctx, 44, y, width - 88, rowHeight - 12, 18);
-                ctx.fillStyle = "rgba(255, 255, 255, 0.1)";
+                ctx.fillStyle = "rgba(255, 255, 255, 0.11)";
                 ctx.fill();
 
                 roundRectPath(ctx, 64, y + 15, 92, 26, 8);
@@ -760,28 +830,37 @@
                 ctx.font = "800 12px Inter, sans-serif";
                 ctx.fillText((st.sub.tag || "CLASS").toUpperCase(), 74, y + 33);
 
-                const shortName = (st.sub.name || "").length > 36
-                    ? (st.sub.name || "").slice(0, 35) + "…"
+                const shortName = (st.sub.name || "").length > 34
+                    ? (st.sub.name || "").slice(0, 33) + "…"
                     : (st.sub.name || "");
                 ctx.fillStyle = "#ffffff";
-                ctx.font = "700 20px Inter, sans-serif";
-                ctx.fillText(shortName, 170, y + 34);
+                ctx.font = "700 19px Inter, sans-serif";
+                ctx.fillText(shortName, 170, y + 33);
+
+                let statusNote = "";
+                if (safe) {
+                    const skip = Math.floor((st.att / goalRatio) - st.tot);
+                    statusNote = skip > 0 ? `Skip ${skip} safe` : "On edge";
+                } else {
+                    const need = Math.max(0, Math.ceil((goalRatio * st.tot - st.att) / (1 - goalRatio)));
+                    statusNote = `Attend ${need} next`;
+                }
 
                 ctx.fillStyle = "#cbd5e1";
                 ctx.font = "500 15px Inter, sans-serif";
-                ctx.fillText(`${st.sub.code || ""}  •  ${st.att}/${st.tot}`, 170, y + 55);
+                ctx.fillText(`${st.sub.code || ""} • ${st.att}/${st.tot} • ${statusNote}`, 170, y + 56);
 
                 ctx.textAlign = "right";
                 ctx.fillStyle = safe ? "#4ade80" : "#fb7185";
                 ctx.font = "800 26px Inter, sans-serif";
-                ctx.fillText(`${st.pct.toFixed(1)}%`, width - 68, y + 40);
+                ctx.fillText(`${st.pct.toFixed(1)}%`, width - 68, y + 42);
                 ctx.textAlign = "left";
 
                 const barX = 64;
                 const barY = y + rowHeight - 20;
                 const barW = width - 128;
                 roundRectPath(ctx, barX, barY, barW, 5, 3);
-                ctx.fillStyle = "rgba(255, 255, 255, 0.15)";
+                ctx.fillStyle = "rgba(255, 255, 255, 0.16)";
                 ctx.fill();
 
                 const fillW = Math.max(8, (Math.min(st.pct, 100) / 100) * barW);
@@ -790,7 +869,7 @@
                 ctx.fill();
             });
 
-            ctx.fillStyle = "#fde68a";
+            ctx.fillStyle = activeTheme.accent;
             ctx.font = "700 17px Inter, sans-serif";
             ctx.textAlign = "center";
             ctx.fillText("Created with ❤️ by Sahil • DCRUSTTrack", width / 2, height - 28);
@@ -1029,25 +1108,43 @@
         function copySummary() {
             if (!appData) return;
             let grandAtt = 0, grandTot = 0;
+            const goalRatio = targetPercent / 100;
             const lines = [];
+
             (appData.subjects || []).forEach((_, idx) => {
                 const st = getSimulatedSubjectStats(idx);
                 if (!st) return;
                 grandAtt += st.att;
                 grandTot += st.tot;
-                lines.push(`• ${st.sub.name} (${st.sub.tag}): ${st.pct}% (${st.att}/${st.tot})`);
+                const safe = st.pct >= targetPercent;
+                const icon = safe ? "🟢" : "🔴";
+                let hint = "";
+                if (safe) {
+                    const skip = Math.floor((st.att / goalRatio) - st.tot);
+                    hint = skip > 0 ? `Skip ${skip}` : "Edge";
+                } else {
+                    const need = Math.max(0, Math.ceil((goalRatio * st.tot - st.att) / (1 - goalRatio)));
+                    hint = `Need ${need}`;
+                }
+                lines.push(`${icon} *${st.sub.name}* [${st.sub.tag}]: *${st.pct}%* (${st.att}/${st.tot} • ${hint})`);
             });
-            const combinedLines = computeCombinedGroups().map(
-                g => `• Combined ${g.name}${g.code ? ` [${g.code}]` : ''}: ${g.pct.toFixed(1)}% (${g.att}/${g.tot})`
-            );
+
+            const combinedLines = computeCombinedGroups().map(g => {
+                const icon = g.pct >= targetPercent ? "✅" : "⚠️";
+                return `${icon} *${g.name}*: *${g.pct.toFixed(1)}%* (${g.att}/${g.tot})`;
+            });
+
             const overallPct = grandTot > 0 ? ((grandAtt / grandTot) * 100).toFixed(1) : "0.0";
             const summary = [
-                `📊 DCRUST Attendance (${formatDisplayedRoll(appData.roll_no)})`,
-                `Overall: ${overallPct}% (${grandAtt}/${grandTot}) • Goal: ${targetPercent}%`,
-                ...(combinedLines.length ? ["", "Combined (L+T / L+L):", ...combinedLines] : []),
+                `📊 *DCRUST Attendance Report*`,
+                `👤 ${formatDisplayedRoll(appData.roll_no)}`,
+                `🎯 *Overall: ${overallPct}%* (${grandAtt}/${grandTot}) | Goal: ${targetPercent}%`,
+                ...(combinedLines.length ? ["", "🧮 *Combined (L+T / L+L):*", ...combinedLines] : []),
                 "",
-                "By Component:",
-                ...lines
+                "📚 *Subject Breakdown:*",
+                ...lines,
+                "",
+                "_Generated via DCRUSTTrack_"
             ].join("\n");
 
             navigator.clipboard?.writeText(summary).then(() => {
