@@ -1,9 +1,10 @@
 import base64
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
 import re
 import time
 import uuid
-from urllib.parse import urljoin
+from urllib.parse import parse_qs, urljoin, urlparse
 
 from bs4 import BeautifulSoup
 from flask import Flask, jsonify, render_template, request
@@ -13,6 +14,7 @@ app = Flask(__name__)
 
 SAMARTH_BASE_URL = "https://dcrustm.samarth.edu.in"
 SAMARTH_LOGIN_URL = f"{SAMARTH_BASE_URL}/"
+ATTENDANCE_INDEX_URL = f"{SAMARTH_BASE_URL}/index.php/student-attendance/attendance/index"
 
 DEFAULT_HEADERS = {
     "User-Agent": (
@@ -67,87 +69,171 @@ def extract_csrf_and_captcha(soup, sess, base_url):
 
 
 def normalize_status(raw_status):
-    """Maps raw attendance cell labels to PRESENT, ABSENT, or LEAVE."""
+    """Maps raw attendance status text to PRESENT, ABSENT, or LEAVE."""
     val = (raw_status or "").strip().upper()
-    if val in ("P", "PRESENT", "1", "Y", "YES", "A/P"):
-        return "PRESENT"
-    if val in ("A", "ABSENT", "0", "N", "NO"):
-        return "ABSENT"
-    if val in ("L", "LEAVE", "OD", "ON DUTY", "MEDICAL"):
+    if "LEAVE" in val or val in ("L", "OD", "ON DUTY", "MEDICAL"):
         return "LEAVE"
-    return "PRESENT" if "PRESENT" in val else ("ABSENT" if "ABSENT" in val else "LEAVE")
+    if "ABSENT" in val or val in ("A", "0", "N", "NO"):
+        return "ABSENT"
+    if "PRESENT" in val or val in ("P", "1", "Y", "YES", "A/P"):
+        return "PRESENT"
+    return "PRESENT"
 
 
-def classify_subject_tag(title, code=""):
-    """Identifies whether a subject entry is Theory, Lab, or Tutorial."""
-    combined = f"{title} {code}".lower()
-    if any(k in combined for k in ("lab", "practical", "workshop")):
+def classify_subject_tag(class_name, course_name):
+    """Determines whether an enrolled class is Lab, Tutorial, or Theory."""
+    combined = f"{class_name} {course_name}".lower()
+    if re.search(r"\b(lab|practical|workshop)\b", combined):
         return "Lab"
-    if any(k in combined for k in ("tute", "tutorial")):
+    if re.search(r"\b(tute|tutorial)\b", combined):
         return "Tutorial"
     return "Theory"
 
 
-def extract_subject_code(text):
-    """Extracts an alphanumeric course code such as BSMAT103D or ESCS101D."""
-    match = re.search(r"\b([A-Z]{2,6}\d{2,4}[A-Z0-9]*)\b", (text or "").upper())
-    return match.group(1) if match else ""
+def extract_code_and_title(course_name):
+    """Splits Samarth course string like 'BSPHY105D : QUANTUM MECHANICS FOR ENGINEERS'."""
+    text = " ".join((course_name or "").split())
+    if " : " in text:
+        left, right = text.split(" : ", 1)
+        code = re.sub(r"\s+", "", left.strip().upper())
+        title = right.strip().title()
+        return code, title
+
+    code_match = re.search(r"\b([A-Z]{2,6}\d{2,4}[A-Z0-9]*)\b", text.upper())
+    code = code_match.group(1) if code_match else ""
+    title = text.strip().title() if text else "Subject"
+    return code, title
 
 
-def parse_attendance_logs(soup):
-    """Extracts date-wise attendance logs grouped by subject code/title if available."""
-    logs_by_key = {}
-
+def extract_log_rows_from_soup(soup):
+    """Extracts date-wise attendance log rows from a view-attendance page soup."""
+    page_logs = []
     for table in soup.find_all("table"):
         headers = [th.get_text(" ", strip=True).lower() for th in table.find_all("th")]
-        rows = table.find_all("tr")
-        if len(rows) < 2:
+        if "attendance date" in headers or ("date" in " ".join(headers) and "status" in " ".join(headers)):
+            for row in table.find_all("tr")[1:]:
+                cols = [td.get_text(" ", strip=True) for td in row.find_all("td")]
+                if len(cols) >= 4:
+                    date_str = cols[1].strip()
+                    time_str = cols[2].strip() or "Scheduled Slot"
+                    status_str = normalize_status(cols[3])
+                    if date_str:
+                        page_logs.append({
+                            "date": date_str,
+                            "time": time_str,
+                            "status": status_str,
+                        })
+    return page_logs
+
+
+def collect_pagination_urls(soup, page_url):
+    """Finds pagination page URLs (e.g., ?class_id=...&page=2) on a detail page."""
+    paginated_urls = []
+    seen = {page_url}
+
+    for a in soup.find_all("a", href=True):
+        href = a["href"].strip()
+        if not href or href.startswith("#") or href.startswith("javascript:"):
+            continue
+        full_url = urljoin(page_url, href)
+        parsed = urlparse(full_url)
+        qs = parse_qs(parsed.query)
+        link_text = a.get_text(" ", strip=True).lower()
+
+        is_page_link = (
+            "page" in qs
+            or "per-page" in qs
+            or bool(re.fullmatch(r"\d+", link_text))
+            or link_text in ("next", "»", ">", "last")
+        )
+        if is_page_link and "view-attendance" in parsed.path.lower() and full_url not in seen:
+            seen.add(full_url)
+            paginated_urls.append(full_url)
+
+    return paginated_urls
+
+
+def parse_view_attendance_page(sess, initial_html, page_url, fallback_class, fallback_course):
+    """Parses summary counts and all paginated date-wise attendance logs."""
+    soup = BeautifulSoup(initial_html, "html.parser")
+    full_text = " ".join(soup.get_text(" ", strip=True).split())
+
+    class_name = fallback_class
+    course_name = fallback_course
+
+    for row in soup.find_all("tr"):
+        cells = [c.get_text(" ", strip=True) for c in row.find_all(["td", "th"])]
+        if len(cells) >= 2:
+            label = cells[0].lower()
+            val = cells[1].strip()
+            if "class name" in label and val:
+                class_name = val
+            elif "course name" in label and val:
+                course_name = val
+
+    present_match = re.search(r"Present\s*Count\s*[:\-]?\s*(\d+)", full_text, re.I)
+    absent_match = re.search(r"Absent\s*Count\s*[:\-]?\s*(\d+)", full_text, re.I)
+    leave_match = re.search(r"Leave\s*Count\s*[:\-]?\s*(\d+)", full_text, re.I)
+    taken_match = re.search(r"Total\s*Classes\s*Taken\s*[:\-]?\s*(\d+)", full_text, re.I)
+
+    present_cnt = int(present_match.group(1)) if present_match else 0
+    absent_cnt = int(absent_match.group(1)) if absent_match else 0
+    leave_cnt = int(leave_match.group(1)) if leave_match else 0
+    total_taken = int(taken_match.group(1)) if taken_match else 0
+
+    logs = extract_log_rows_from_soup(soup)
+    seen_log_keys = {(l["date"], l["time"], l["status"]) for l in logs}
+
+    queue = collect_pagination_urls(soup, page_url)
+    visited = {page_url}
+
+    while queue:
+        next_url = queue.pop(0)
+        if next_url in visited:
+            continue
+        visited.add(next_url)
+        try:
+            p_res = sess.get(next_url, timeout=15, allow_redirects=True)
+            if p_res.ok and p_res.text:
+                p_soup = BeautifulSoup(p_res.text, "html.parser")
+                for entry in extract_log_rows_from_soup(p_soup):
+                    key = (entry["date"], entry["time"], entry["status"])
+                    if key not in seen_log_keys:
+                        seen_log_keys.add(key)
+                        logs.append(entry)
+                for discovered in collect_pagination_urls(p_soup, p_res.url):
+                    if discovered not in visited and discovered not in queue:
+                        queue.append(discovered)
+        except Exception:
             continue
 
-        has_date_col = any("date" in h for h in headers)
-        has_status_col = any(k in h for h in headers for k in ("status", "att", "present", "remark"))
+    if logs and not (present_match or absent_match or leave_match):
+        present_cnt = sum(1 for item in logs if item["status"] == "PRESENT")
+        absent_cnt = sum(1 for item in logs if item["status"] == "ABSENT")
+        leave_cnt = sum(1 for item in logs if item["status"] == "LEAVE")
 
-        if has_date_col or has_status_col:
-            for row in rows[1:]:
-                cols = [td.get_text(" ", strip=True) for td in row.find_all("td")]
-                if len(cols) < 2:
-                    continue
+    base_total = total_taken if total_taken > 0 else (present_cnt + absent_cnt + leave_cnt)
+    # Formula: Present / (Total Classes - Leave)
+    attended = present_cnt
+    effective_total = base_total - leave_cnt
+    total = effective_total if effective_total > 0 else base_total
 
-                date_val = ""
-                time_val = "Scheduled Slot"
-                status_val = ""
-                sub_key = ""
+    code, title = extract_code_and_title(course_name)
+    tag = classify_subject_tag(class_name, course_name)
 
-                for cell in cols:
-                    if not date_val and re.search(
-                        r"\b(\d{1,2}[-/]\d{1,2}[-/]\d{2,4}|\d{4}[-/]\d{1,2}[-/]\d{1,2})\b",
-                        cell,
-                    ):
-                        date_val = cell
-                    elif re.search(r"\b\d{1,2}:\d{2}\b", cell):
-                        time_val = cell
-                    elif cell.strip().upper() in (
-                        "P", "A", "L", "PRESENT", "ABSENT", "LEAVE", "OD", "ON DUTY"
-                    ):
-                        status_val = normalize_status(cell)
-                    elif not sub_key and len(cell) > 3:
-                        code = extract_subject_code(cell)
-                        sub_key = code if code else cell.strip().lower()
-
-                if date_val and status_val:
-                    entry = {
-                        "date": date_val,
-                        "time": time_val,
-                        "status": status_val,
-                    }
-                    target_key = sub_key or "__GENERAL__"
-                    logs_by_key.setdefault(target_key, []).append(entry)
-
-    return logs_by_key
+    return {
+        "code": code,
+        "name": f"{title} ({class_name})" if class_name else title,
+        "tag": tag,
+        "attended": attended,
+        "total": total,
+        "leaves": leave_cnt,
+        "logs": logs,
+    }
 
 
-def parse_timetable(soup):
-    """Extracts weekly Monday–Saturday class schedule if present on the page."""
+def parse_timetable_from_soup(soup):
+    """Extracts weekly Monday–Saturday schedule if a timetable table is present."""
     timetable = {
         "Monday": [],
         "Tuesday": [],
@@ -159,138 +245,112 @@ def parse_timetable(soup):
     days_re = re.compile(r"\b(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday)\b", re.I)
 
     for table in soup.find_all("table"):
-        table_text = table.get_text(" ", strip=True)
-        if not days_re.search(table_text):
+        if not days_re.search(table.get_text(" ", strip=True)):
             continue
-
-        header_cells = [c.get_text(" ", strip=True) for c in table.find_all("th")]
+        headers = [th.get_text(" ", strip=True) for th in table.find_all("th")]
         for row in table.find_all("tr"):
             cells = [c.get_text(" ", strip=True) for c in row.find_all("td")]
             if len(cells) < 2:
                 continue
-
             day_match = days_re.search(cells[0])
             if day_match:
                 day_name = day_match.group(1).capitalize()
-                for idx, slot_text in enumerate(cells[1:], start=1):
-                    cleaned = " ".join(slot_text.split())
-                    if cleaned and cleaned.lower() not in ("-", "--", "free", "break", "lunch", "off"):
-                        slot_time = (
-                            header_cells[idx]
-                            if idx < len(header_cells) and header_cells[idx]
-                            else f"Slot {idx}"
-                        )
+                for idx, slot_val in enumerate(cells[1:], start=1):
+                    cleaned = " ".join(slot_val.split())
+                    if cleaned and cleaned.lower() not in ("-", "--", "free", "break", "lunch", "na", "n/a"):
+                        slot_time = headers[idx] if idx < len(headers) and headers[idx] else f"Slot {idx}"
                         timetable[day_name].append({
                             "time": slot_time,
                             "raw": cleaned,
                         })
-
     return timetable
 
 
-def parse_subjects_from_json_blobs(html_text):
-    """Attempts to extract attendance entries if embedded in JSON/script tags."""
-    extracted = []
-    # Look for objects containing subject/course name + attended/delivered or present/total
-    for match in re.finditer(r"\{[^{}]{20,500}\}", html_text):
-        chunk = match.group(0)
-        if not re.search(r"(subject|course)", chunk, re.I):
+def fetch_samarth_data(sess, roll_no):
+    """Fetches enrolled classes, each class's paginated attendance details, and timetable."""
+    idx_res = sess.get(ATTENDANCE_INDEX_URL, timeout=15, allow_redirects=True)
+    idx_res.raise_for_status()
+
+    if "loginform[password]" in idx_res.text.lower():
+        raise RuntimeError("Samarth session was not authenticated.")
+
+    soup = BeautifulSoup(idx_res.text, "html.parser")
+    timetable = parse_timetable_from_soup(soup)
+
+    for a in soup.find_all("a", href=True):
+        label_l = a.get_text(" ", strip=True).lower()
+        if "time" in label_l and "table" in label_l:
+            tt_url = urljoin(idx_res.url, a["href"])
+            try:
+                tt_res = sess.get(tt_url, timeout=12)
+                if tt_res.ok:
+                    parsed_tt = parse_timetable_from_soup(BeautifulSoup(tt_res.text, "html.parser"))
+                    for day, slots in parsed_tt.items():
+                        if slots and not timetable[day]:
+                            timetable[day] = slots
+            except Exception:
+                pass
+            break
+
+    enrolled_items = []
+    seen_urls = set()
+
+    for row in soup.find_all("tr"):
+        view_link = row.find("a", href=lambda h: h and "view-attendance" in h)
+        if not view_link:
             continue
-        att_m = re.search(r'"?(?:attended|present|classes_attended)"?\s*:\s*"?(\d+)"?', chunk, re.I)
-        tot_m = re.search(r'"?(?:total|delivered|classes_held|conducted)"?\s*:\s*"?(\d+)"?', chunk, re.I)
-        name_m = re.search(r'"?(?:subject_?name|course_?name|title|name)"?\s*:\s*"([^"]{3,120})"', chunk, re.I)
-        code_m = re.search(r'"?(?:subject_?code|course_?code|code)"?\s*:\s*"([^"]{2,30})"', chunk, re.I)
 
-        if att_m and tot_m and name_m:
-            att = int(att_m.group(1))
-            tot = int(tot_m.group(1))
-            if tot > 0:
-                name = name_m.group(1).strip()
-                code = (code_m.group(1).strip() if code_m else extract_subject_code(name)).upper()
-                extracted.append({
-                    "code": code,
-                    "name": f"{name} ({code})" if code and code not in name.upper() else name,
-                    "tag": classify_subject_tag(name, code),
-                    "attended": att,
-                    "total": tot,
-                    "leaves": 0,
-                    "logs": [],
-                })
-    return extracted
+        detail_url = urljoin(idx_res.url, view_link["href"])
+        if detail_url in seen_urls:
+            continue
+        seen_urls.add(detail_url)
 
+        td_texts = [td.get_text(" ", strip=True) for td in row.find_all("td")]
+        content_cells = [
+            t for idx_c, t in enumerate(td_texts)
+            if not (idx_c == 0 and re.fullmatch(r"\d+", t))
+            and "view" not in t.lower()
+            and not re.fullmatch(r"20\d{2}\s*-\s*20\d{2}", t)
+            and "semester" not in t.lower()
+        ]
 
-def parse_attendance_payload(html_text, roll_no):
-    """Parses subjects, attendance counts, date logs, and timetable from Samarth HTML."""
-    soup = BeautifulSoup(html_text, "html.parser")
-    logs_by_key = parse_attendance_logs(soup)
-    timetable = parse_timetable(soup)
+        class_name = content_cells[0] if len(content_cells) >= 1 else ""
+        course_name = content_cells[1] if len(content_cells) >= 2 else ""
+
+        enrolled_items.append({
+            "class_name": class_name,
+            "course_name": course_name,
+            "url": detail_url,
+        })
+
     subjects = []
+    if enrolled_items:
+        def _load_detail(item):
+            resp = sess.get(item["url"], timeout=15, allow_redirects=True)
+            resp.raise_for_status()
+            return parse_view_attendance_page(
+                sess, resp.text, resp.url, item["class_name"], item["course_name"]
+            )
 
-    for table in soup.find_all("table"):
-        rows = table.find_all("tr")
-        for row in rows[1:]:
-            cols = [c.get_text(" ", strip=True) for c in row.find_all(["td", "th"])]
-            if len(cols) < 2:
-                continue
-
-            if re.match(
-                r"^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday)$",
-                cols[0].strip(),
-                re.I,
-            ):
-                continue
-
-            subject_cell = cols[0]
-            code_cell = cols[1] if len(cols) > 1 else ""
-            code = extract_subject_code(f"{code_cell} {subject_cell}")
-
-            name_parts = [subject_cell]
-            if code and code not in subject_cell.upper():
-                name_parts.append(f"({code})")
-            full_name = " ".join(p for p in name_parts if p).strip()
-
-            tag = classify_subject_tag(full_name, code)
-            attended = 0
-            total = 0
-            leaves = 0
-
-            for cell in cols[1:]:
-                frac_match = re.search(r"(\d+)\s*/\s*(\d+)", cell)
-                if frac_match:
-                    attended = int(frac_match.group(1))
-                    total = int(frac_match.group(2))
-                    break
-
-            if total == 0:
-                nums = [int(n) for n in re.findall(r"\b\d+\b", " ".join(cols[1:]))]
-                if len(nums) >= 2:
-                    attended = nums[0]
-                    total = max(nums[1], nums[0])
-
-            for cell in cols[1:]:
-                leave_match = re.search(r"leave[:\s-]*(\d+)", cell, re.I)
-                if leave_match:
-                    leaves = int(leave_match.group(1))
-                    break
-
-            if full_name and total > 0:
-                matched_logs = (
-                    logs_by_key.get(code)
-                    or logs_by_key.get(full_name.lower())
-                    or []
-                )
-                subjects.append({
-                    "code": code,
-                    "name": full_name,
-                    "tag": tag,
-                    "attended": attended,
-                    "total": total,
-                    "leaves": leaves,
-                    "logs": matched_logs,
-                })
-
-    if not subjects:
-        subjects = parse_subjects_from_json_blobs(html_text)
+        with ThreadPoolExecutor(max_workers=6) as executor:
+            futures = {executor.submit(_load_detail, item): idx for idx, item in enumerate(enrolled_items)}
+            ordered = [None] * len(enrolled_items)
+            for fut in as_completed(futures):
+                pos = futures[fut]
+                try:
+                    ordered[pos] = fut.result()
+                except Exception:
+                    code, title = extract_code_and_title(enrolled_items[pos]["course_name"])
+                    ordered[pos] = {
+                        "code": code,
+                        "name": f"{title} ({enrolled_items[pos]['class_name']})",
+                        "tag": classify_subject_tag(enrolled_items[pos]["class_name"], enrolled_items[pos]["course_name"]),
+                        "attended": 0,
+                        "total": 0,
+                        "leaves": 0,
+                        "logs": [],
+                    }
+            subjects = [s for s in ordered if s and s["total"] > 0]
 
     return {
         "status": "success",
@@ -420,39 +480,11 @@ def get_attendance():
                 "message": "Invalid credentials or captcha. Please verify and try again.",
             })
 
-        combined_html = login_post_res.text
-        dashboard_soup = BeautifulSoup(login_post_res.text, "html.parser")
-
-        # Follow internal links/scripts likely to hold attendance or timetable data
-        candidate_urls = []
-        for link in dashboard_soup.find_all("a", href=True):
-            href_lower = link["href"].lower()
-            if any(k in href_lower for k in ("attendance", "timetable", "routine", "schedule", "course", "student")):
-                candidate_urls.append(urljoin(login_post_res.url, link["href"]))
-
-        for script_tag in dashboard_soup.find_all("script", src=True):
-            src_lower = script_tag["src"].lower()
-            if any(k in src_lower for k in ("attendance", "timetable")):
-                candidate_urls.append(urljoin(login_post_res.url, script_tag["src"]))
-
-        seen_sub_urls = set()
-        for sub_url in candidate_urls:
-            if sub_url in seen_sub_urls or sub_url.startswith("javascript:"):
-                continue
-            seen_sub_urls.add(sub_url)
-            try:
-                sub_res = sess.get(sub_url, timeout=15)
-                if sub_res.ok and sub_res.text:
-                    combined_html += "\n" + sub_res.text
-            except Exception:
-                continue
-
-        result = parse_attendance_payload(combined_html, username)
+        result = fetch_samarth_data(sess, username)
         if not result["subjects"]:
-            page_title = dashboard_soup.title.get_text(" ", strip=True) if dashboard_soup.title else "Unknown Page"
             return jsonify({
                 "status": "error",
-                "message": f"Logged in ({page_title}), but no attendance rows were found on the portal.",
+                "message": "Logged in, but no enrolled attendance rows were found on Samarth.",
             })
 
         return jsonify(result)
