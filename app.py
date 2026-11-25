@@ -11,8 +11,8 @@ import requests
 
 app = Flask(__name__)
 
-SAMARTH_BASE_URL = "https://dcrust.samarth.edu.in"
-SAMARTH_LOGIN_URL = f"{SAMARTH_BASE_URL}/index.php/site/login"
+SAMARTH_BASE_URL = "https://dcrustm.samarth.edu.in"
+SAMARTH_LOGIN_URL = f"{SAMARTH_BASE_URL}/"
 
 DEFAULT_HEADERS = {
     "User-Agent": (
@@ -24,7 +24,6 @@ DEFAULT_HEADERS = {
     "Accept-Language": "en-US,en;q=0.9",
 }
 
-# In-memory session store: { session_id: { "session": requests.Session(), "csrf_name": str, "csrf_token": str, "created_at": float } }
 SESSIONS = {}
 SESSION_TTL_SECONDS = 1800  # 30 minutes
 
@@ -40,8 +39,8 @@ def cleanup_expired_sessions():
         SESSIONS.pop(sid, None)
 
 
-def extract_csrf_and_captcha(soup, sess):
-    """Extracts hidden CSRF token and base64 CAPTCHA image from the Samarth login page."""
+def extract_csrf_and_captcha(soup, sess, base_url):
+    """Extracts hidden CSRF token and base64 CAPTCHA image from the login page."""
     csrf_name = "_csrf"
     csrf_token = ""
 
@@ -56,7 +55,7 @@ def extract_csrf_and_captcha(soup, sess):
         or soup.find("img", {"src": re.compile(r"captcha", re.I)})
     )
     if captcha_img and captcha_img.get("src"):
-        captcha_url = urljoin(SAMARTH_LOGIN_URL, captcha_img["src"].strip())
+        captcha_url = urljoin(base_url, captcha_img["src"].strip())
         try:
             cap_res = sess.get(captcha_url, headers=DEFAULT_HEADERS, timeout=12)
             if cap_res.ok and cap_res.content:
@@ -120,11 +119,16 @@ def parse_attendance_logs(soup):
                 sub_key = ""
 
                 for cell in cols:
-                    if not date_val and re.search(r"\b(\d{1,2}[-/]\d{1,2}[-/]\d{2,4}|\d{4}[-/]\d{1,2}[-/]\d{1,2})\b", cell):
+                    if not date_val and re.search(
+                        r"\b(\d{1,2}[-/]\d{1,2}[-/]\d{2,4}|\d{4}[-/]\d{1,2}[-/]\d{1,2})\b",
+                        cell,
+                    ):
                         date_val = cell
                     elif re.search(r"\b\d{1,2}:\d{2}\b", cell):
                         time_val = cell
-                    elif cell.strip().upper() in ("P", "A", "L", "PRESENT", "ABSENT", "LEAVE", "OD", "ON DUTY"):
+                    elif cell.strip().upper() in (
+                        "P", "A", "L", "PRESENT", "ABSENT", "LEAVE", "OD", "ON DUTY"
+                    ):
                         status_val = normalize_status(cell)
                     elif not sub_key and len(cell) > 3:
                         code = extract_subject_code(cell)
@@ -184,6 +188,37 @@ def parse_timetable(soup):
     return timetable
 
 
+def parse_subjects_from_json_blobs(html_text):
+    """Attempts to extract attendance entries if embedded in JSON/script tags."""
+    extracted = []
+    # Look for objects containing subject/course name + attended/delivered or present/total
+    for match in re.finditer(r"\{[^{}]{20,500}\}", html_text):
+        chunk = match.group(0)
+        if not re.search(r"(subject|course)", chunk, re.I):
+            continue
+        att_m = re.search(r'"?(?:attended|present|classes_attended)"?\s*:\s*"?(\d+)"?', chunk, re.I)
+        tot_m = re.search(r'"?(?:total|delivered|classes_held|conducted)"?\s*:\s*"?(\d+)"?', chunk, re.I)
+        name_m = re.search(r'"?(?:subject_?name|course_?name|title|name)"?\s*:\s*"([^"]{3,120})"', chunk, re.I)
+        code_m = re.search(r'"?(?:subject_?code|course_?code|code)"?\s*:\s*"([^"]{2,30})"', chunk, re.I)
+
+        if att_m and tot_m and name_m:
+            att = int(att_m.group(1))
+            tot = int(tot_m.group(1))
+            if tot > 0:
+                name = name_m.group(1).strip()
+                code = (code_m.group(1).strip() if code_m else extract_subject_code(name)).upper()
+                extracted.append({
+                    "code": code,
+                    "name": f"{name} ({code})" if code and code not in name.upper() else name,
+                    "tag": classify_subject_tag(name, code),
+                    "attended": att,
+                    "total": tot,
+                    "leaves": 0,
+                    "logs": [],
+                })
+    return extracted
+
+
 def parse_attendance_payload(html_text, roll_no):
     """Parses subjects, attendance counts, date logs, and timetable from Samarth HTML."""
     soup = BeautifulSoup(html_text, "html.parser")
@@ -195,11 +230,14 @@ def parse_attendance_payload(html_text, roll_no):
         rows = table.find_all("tr")
         for row in rows[1:]:
             cols = [c.get_text(" ", strip=True) for c in row.find_all(["td", "th"])]
-            if len(cols) < 3:
+            if len(cols) < 2:
                 continue
 
-            # Skip pure timetable rows
-            if re.match(r"^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday)$", cols[0].strip(), re.I):
+            if re.match(
+                r"^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday)$",
+                cols[0].strip(),
+                re.I,
+            ):
                 continue
 
             subject_cell = cols[0]
@@ -251,6 +289,9 @@ def parse_attendance_payload(html_text, roll_no):
                     "logs": matched_logs,
                 })
 
+    if not subjects:
+        subjects = parse_subjects_from_json_blobs(html_text)
+
     return {
         "status": "success",
         "roll_no": roll_no,
@@ -281,13 +322,14 @@ def init_login():
     sess.headers.update(DEFAULT_HEADERS)
 
     try:
-        res = sess.get(SAMARTH_LOGIN_URL, timeout=15)
+        res = sess.get(SAMARTH_LOGIN_URL, timeout=15, allow_redirects=True)
         res.raise_for_status()
         soup = BeautifulSoup(res.text, "html.parser")
-        csrf_name, csrf_token, captcha_b64 = extract_csrf_and_captcha(soup, sess)
+        csrf_name, csrf_token, captcha_b64 = extract_csrf_and_captcha(soup, sess, res.url)
 
         SESSIONS[session_id] = {
             "session": sess,
+            "login_url": res.url,
             "csrf_name": csrf_name,
             "csrf_token": csrf_token,
             "created_at": time.time(),
@@ -300,6 +342,7 @@ def init_login():
     except Exception as exc:
         SESSIONS[session_id] = {
             "session": sess,
+            "login_url": SAMARTH_LOGIN_URL,
             "csrf_name": "_csrf",
             "csrf_token": "",
             "created_at": time.time(),
@@ -330,15 +373,23 @@ def get_attendance():
     session_entry = SESSIONS.get(session_id)
     if session_entry:
         sess = session_entry["session"]
+        target_login_url = session_entry.get("login_url") or SAMARTH_LOGIN_URL
     else:
         sess = requests.Session()
         sess.headers.update(DEFAULT_HEADERS)
+        target_login_url = SAMARTH_LOGIN_URL
 
     try:
-        login_page_res = sess.get(SAMARTH_LOGIN_URL, timeout=15)
+        login_page_res = sess.get(target_login_url, timeout=15, allow_redirects=True)
         login_page_res.raise_for_status()
+        actual_login_url = login_page_res.url
         login_soup = BeautifulSoup(login_page_res.text, "html.parser")
-        csrf_name, csrf_token, _ = extract_csrf_and_captcha(login_soup, sess)
+        csrf_name, csrf_token, _ = extract_csrf_and_captcha(login_soup, sess, actual_login_url)
+
+        form_action = actual_login_url
+        login_form = login_soup.find("form")
+        if login_form and login_form.get("action"):
+            form_action = urljoin(actual_login_url, login_form["action"].strip())
 
         form_data = {
             "LoginForm[username]": username,
@@ -355,7 +406,7 @@ def get_attendance():
                 form_data[inp_name] = hidden_inp.get("value") or ""
 
         login_post_res = sess.post(
-            SAMARTH_LOGIN_URL,
+            form_action,
             data=form_data,
             timeout=20,
             allow_redirects=True,
@@ -372,22 +423,36 @@ def get_attendance():
         combined_html = login_post_res.text
         dashboard_soup = BeautifulSoup(login_post_res.text, "html.parser")
 
+        # Follow internal links/scripts likely to hold attendance or timetable data
+        candidate_urls = []
         for link in dashboard_soup.find_all("a", href=True):
             href_lower = link["href"].lower()
-            if any(k in href_lower for k in ("attendance", "timetable", "routine", "schedule")):
-                sub_url = urljoin(login_post_res.url, link["href"])
-                try:
-                    sub_res = sess.get(sub_url, timeout=15)
-                    if sub_res.ok and sub_res.text:
-                        combined_html += "\n" + sub_res.text
-                except Exception:
-                    continue
+            if any(k in href_lower for k in ("attendance", "timetable", "routine", "schedule", "course", "student")):
+                candidate_urls.append(urljoin(login_post_res.url, link["href"]))
+
+        for script_tag in dashboard_soup.find_all("script", src=True):
+            src_lower = script_tag["src"].lower()
+            if any(k in src_lower for k in ("attendance", "timetable")):
+                candidate_urls.append(urljoin(login_post_res.url, script_tag["src"]))
+
+        seen_sub_urls = set()
+        for sub_url in candidate_urls:
+            if sub_url in seen_sub_urls or sub_url.startswith("javascript:"):
+                continue
+            seen_sub_urls.add(sub_url)
+            try:
+                sub_res = sess.get(sub_url, timeout=15)
+                if sub_res.ok and sub_res.text:
+                    combined_html += "\n" + sub_res.text
+            except Exception:
+                continue
 
         result = parse_attendance_payload(combined_html, username)
         if not result["subjects"]:
+            page_title = dashboard_soup.title.get_text(" ", strip=True) if dashboard_soup.title else "Unknown Page"
             return jsonify({
                 "status": "error",
-                "message": "Logged in, but no attendance rows were found on the portal.",
+                "message": f"Logged in ({page_title}), but no attendance rows were found on the portal.",
             })
 
         return jsonify(result)
@@ -395,7 +460,7 @@ def get_attendance():
     except requests.Timeout:
         return jsonify({
             "status": "error",
-            "message": "DCRUST portal timed out. Please try again.",
+            "message": "DCRUST Samarth portal timed out. Please try again.",
         })
     except Exception as exc:
         return jsonify({
